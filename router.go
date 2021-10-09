@@ -1,6 +1,15 @@
 package main
 
-import "net"
+import (
+	"flag"
+	"fmt"
+	"net"
+	"os"
+	"strconv"
+	"strings"
+)
+
+const DEBUG bool = false
 
 // Message Fields
 const TYPE string = "type"
@@ -30,51 +39,88 @@ const PEER string = "peer"
 const PROV string = "prov"
 
 type Router struct {
-	routes []string
-    updates []string
-    relations map[string]int
-    sockets []int
+	routes    []string
+	updates   []string
+	relations map[string]string
+	sockets   map[string]net.Conn
 }
 
 func main() {
+	asn, networks := parseInput()
 	for {
-        //     socks = select.select(self.sockets.values(), [], [], 0.1)[0]
-        //     for conn in socks:
-        //         try:
-        //             k = conn.recv(65535)
-        //         except:
-        //             # either died on a connection reset, or was SIGTERM's by parent
-        //             return
-        //         if k:
-        //             for sock in self.sockets:
-        //                 if self.sockets[sock] == conn:
-        //                     srcif = sock
-        //             msg = json.loads(k)
-        //             if not self.handle_packet(srcif, msg):
-        //                 self.send_error(conn, msg)
-        //         else:
-        //             return
-        // return
+		//     socks = select.select(self.sockets.values(), [], [], 0.1)[0]
+		//     for conn in socks:
+		//         try:
+		//             k = conn.recv(65535)
+		//         except:
+		//             # either died on a connection reset, or was SIGTERM's by parent
+		//             return
+		//         if k:
+		//             for sock in self.sockets:
+		//                 if self.sockets[sock] == conn:
+		//                     srcif = sock
+		//             msg = json.loads(k)
+		//             if not self.handle_packet(srcif, msg):
+		//                 self.send_error(conn, msg)
+		//         else:
+		//             return
+		// return
 
 	}
 
-
 }
 
-func makeRouter(networks []string) {
+func parseInput() (int, []string) {
+	if len(os.Args) < 2 {
+		panic("Please specify an ASN for your router!")
+	}
+	asn, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		panic("Please include a valid ASN integer!")
+	}
+
+	return asn, os.Args[2:]
+}
+
+func makeRouter(networks []string) Router {
+	router := new(Router)
 	//     self.routes = []
 	//     self.updates = []
 	//     self.relations = {}
 	//     self.sockets = {}
 	//     for relationship in networks:
 	//         network, relation = relationship.split("-")
-	//         if DEBUG: 
+	//         if DEBUG:
 	//             print("Starting socket for", network, relation)
 	//         self.sockets[network] = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
 	//         self.sockets[network].setblocking(0)
 	//         self.sockets[network].connect(network)
 	//         self.relations[network] = relation
 	//     return
+
+	for _, relationship := range networks {
+		splitArr := strings.Split(relationship, "-")
+		network, relation := splitArr[0], splitArr[1]
+		if DEBUG {
+			fmt.Println("Starting socket for ", network, relation)
+		}
+		router.sockets[network] = startSocket(network)
+		// set blocking?
+		router.relations[network] = relation
+	}
+	return *router
+}
+
+func startSocket(network string) net.Conn {
+	connection, err := net.Dial("unix", network)
+	checkError(err)
+	return connection
+}
+
+func checkError(err error) {
+	if err != nil {
+		panic("Error occurred: " + err.Error())
+	}
 }
 
 // Lookup all valid routes for an address
@@ -100,7 +146,7 @@ func get_self_origin(routes []string) {
 func get_origin_routes(routes []string) {
 
 }
-         
+
 // Don't allow Peer->Peer, Peer->Prov, or Prov->Peer forwards
 func filter_relationships(srcif string, routes []string) {
 
@@ -108,23 +154,23 @@ func filter_relationships(srcif string, routes []string) {
 
 // Select the best route for a given address
 func get_route(srcif string, daddr string) {
-        // peer = None
-        // routes = lookup_routers(daddr)
-        // # Rules go here
-        // if routes:
-        //     # 1. Highest Preference
-        //     routes = self.get_highest_preference(routes)
-        //     # 2. Self Origin
-        //     routes = self.get_self_origin(routes)
-        //     # 3. Shortest ASPath
-        //     routes = self.get_shortest_as_path(routes)
-        //     # 4. IGP > EGP > UNK
-        //     routes = self.get_origin_routes(routes)
-        //     # 5. Lowest IP Address
-        //     # TODO
-        //     # Final check: enforce peering relationships
-        //     routes = self.filter_relationships(srcif, routes)
-        // return self.sockets[peer] if peer else None
+	// peer = None
+	// routes = lookup_routers(daddr)
+	// # Rules go here
+	// if routes:
+	//     # 1. Highest Preference
+	//     routes = self.get_highest_preference(routes)
+	//     # 2. Self Origin
+	//     routes = self.get_self_origin(routes)
+	//     # 3. Shortest ASPath
+	//     routes = self.get_shortest_as_path(routes)
+	//     # 4. IGP > EGP > UNK
+	//     routes = self.get_origin_routes(routes)
+	//     # 5. Lowest IP Address
+	//     # TODO
+	//     # Final check: enforce peering relationships
+	//     routes = self.filter_relationships(srcif, routes)
+	// return self.sockets[peer] if peer else None
 
 }
 
