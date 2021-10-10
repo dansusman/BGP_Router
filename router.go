@@ -18,13 +18,12 @@ func readAll(conn net.Conn) (message []byte, err error) {
 	var buf bytes.Buffer
 	// NewReader creates reader of default size
 	scanner := bufio.NewReader(conn)
-
 	// looping through the response to ensure the entire message is read
 	for {
 		tmp, e := scanner.ReadString('\n')
 		if e != nil {
 			if e != io.EOF {
-				return "", e
+				return make([]byte, 0), e
 			}
 			break
 		}
