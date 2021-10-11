@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-import argparse, socket, time, json, select, struct, math
+import argparse, socket, json, select, copy
+from typing import Dict, List
 
 #DEBUG = True
 DEBUG = False
@@ -43,17 +44,25 @@ PROV = "prov"
 ##########################################################################################
 
 class Router:
-
     routes = None
     updates = None
     relations = None
     sockets = None
+    forwarding_table = None
 
-    def __init__(self, networks):
-        self.routes = []
+    def __init__(self, asn: str, networks: List[Dict[str, str]]):
+        # map from IP address to list of IP addresses it can reach
+        self.routes = {}
+        # cached copy of update announcement (whole packets)
         self.updates = []
+        # map from ip address to type of relationship
         self.relations = {}
+        # map from ip address to connection object
         self.sockets = {}
+        # array of map<string, string> from description to IP address
+        self.forwarding_table = []
+        # this router's Autonomous System Number
+        self.asn = asn
         for relationship in networks:
             network, relation = relationship.split("-")
             if DEBUG: 
@@ -120,7 +129,7 @@ class Router:
             routes = self.filter_relationships(srcif, routes)
         return self.sockets[peer] if peer else None
 
-    def forward(self, srcif, packet):
+    def forward(self, srcif, packet) -> bool:
         """	Forward a data packet	"""
         # TODO
         return False
@@ -130,25 +139,71 @@ class Router:
         # TODO (this is the most difficult task, save until last)
         return False
 
-    def update(self, srcif, packet):
+    def update(self, srcif, packet) -> bool:
         """	handle update packets	"""
-        # TODO 
-        return False
+        packet["srcif"] = srcif
+        self.updates.append(packet)
+        packetMessage = packet[MESG]
+        self.forwarding_table.append({
+            # NTWK
+            NTWK: packetMessage[NTWK],
+            # NMSK
+            NMSK: packetMessage[NMSK],
+            # PEER IP
+            PEER: packet[SRCE],
+            # Local Pref
+            LPRF: packetMessage[LPRF],
+            # Self Origin
+            SORG: packetMessage[SORG],
+            # AS Path
+            APTH: packetMessage[APTH],
+            # Origin
+            ORIG: packetMessage[ORIG]
+        })
+        source_relationship = self.relations[srcif]
+        for neighbor in self.sockets:
+            copy_of_packet = copy.deepcopy(packet)
+            copy_of_packet[SRCE] = neighbor
+            copy_of_packet[DEST] = neighbor
+            copy_of_packet[MESG][APTH].append(int(self.asn))
+            if source_relationship == CUST:
+                # send updates to all other neighbors (everyone but me)
+                if neighbor != srcif:
+                    self.sockets[neighbor].sendall(json.dumps(copy_of_packet))
+            elif source_relationship == PEER or source_relationship == PROV:
+                if self.relations[neighbor] == CUST:
+                    self.sockets[neighbor].sendall(json.dumps(copy_of_packet))
+        return True
     
-    def revoke(self, packet):
+    def revoke(self, packet) -> bool:
         """	handle revoke packets	"""
         # TODO
         return True
 
-    def dump(self, packet):
-        """	handles dump table requests	"""
-        # TODO
+    def dump(self, packet) -> bool:
+        """Handles dump table requests by crafting a table message."""
+        dump_msg = {}
+        dump_msg[SRCE] = packet[DEST]
+        dump_msg[DEST] = packet[SRCE]
+        dump_msg[TYPE] = "table"
+        dump_msg[MESG] = self.forwarding_table
+        # send table response to original source (who requested the dump data)
+        self.sockets[packet[SRCE]].sendall(json.dumps(dump_msg))
         return True
 
-    def handle_packet(self, srcif, packet):
+    def handle_packet(self, srcif, packet) -> bool:
         """	dispatches a packet """
-        # TODO
-        return False
+        typeOfPacket = packet["type"]
+        if typeOfPacket == DATA:
+            return self.forward(srcif, packet)
+        elif typeOfPacket == DUMP:
+            return self.dump(packet)
+        elif typeOfPacket == UPDT:
+            return self.update(srcif, packet)
+        elif typeOfPacket == RVKE:
+            return self.revoke(packet)
+        else:
+            return False
 
     def send_error(self, conn, msg):
         """ Send a no_route error message """
@@ -173,7 +228,6 @@ class Router:
                         self.send_error(conn, msg)
                 else:
                     return
-        return
 
 if __name__ == "__main__":
     router = Router(args.networks)
