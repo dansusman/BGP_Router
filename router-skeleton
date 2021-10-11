@@ -163,16 +163,17 @@ class Router:
         source_relationship = self.relations[srcif]
         for neighbor in self.sockets:
             copy_of_packet = copy.deepcopy(packet)
-            copy_of_packet[SRCE] = neighbor
+            update_source = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
+            copy_of_packet[SRCE] = update_source
             copy_of_packet[DEST] = neighbor
             copy_of_packet[MESG][APTH].append(int(self.asn))
             if source_relationship == CUST:
                 # send updates to all other neighbors (everyone but me)
                 if neighbor != srcif:
-                    self.sockets[neighbor].sendall(json.dumps(copy_of_packet))
+                    self.sockets[neighbor].sendall(json.dumps(copy_of_packet).encode())
             elif source_relationship == PEER or source_relationship == PROV:
                 if self.relations[neighbor] == CUST:
-                    self.sockets[neighbor].sendall(json.dumps(copy_of_packet))
+                    self.sockets[neighbor].sendall(json.dumps(copy_of_packet).encode())
         return True
     
     def revoke(self, packet) -> bool:
@@ -188,7 +189,7 @@ class Router:
         dump_msg[TYPE] = "table"
         dump_msg[MESG] = self.forwarding_table
         # send table response to original source (who requested the dump data)
-        self.sockets[packet[SRCE]].sendall(json.dumps(dump_msg))
+        self.sockets[packet[SRCE]].sendall(json.dumps(dump_msg).encode())
         return True
 
     def handle_packet(self, srcif, packet) -> bool:
