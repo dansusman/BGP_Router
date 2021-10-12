@@ -242,6 +242,7 @@ class Router:
                     copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
                     copy_of_packet[DEST] = neighbor
                     sending_msg = json.dumps(copy_of_packet).encode()
+                    print(sending_msg)
                     self.sockets[neighbor].sendall(sending_msg)
         else:
             for neighbor in self.sockets.keys():
@@ -249,6 +250,7 @@ class Router:
                     copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
                     copy_of_packet[DEST] = neighbor
                     sending_msg = json.dumps(copy_of_packet).encode()
+                    print(sending_msg)
                     self.sockets[neighbor].sendall(sending_msg)
 
         return True
@@ -267,6 +269,7 @@ class Router:
         dump_msg[MESG] = self.forwarding_table
         sending_msg = json.dumps(dump_msg).encode()
         # send table response to original source (who requested the dump data)
+        print(sending_msg)
         self.sockets[packet[SRCE]].sendall(sending_msg)
         return True
 
