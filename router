@@ -169,7 +169,9 @@ class Router:
             sending_msg = json.dumps(copy_of_packet).encode()
             if source_relationship == CUST or self.relations[network] == CUST:
                 # send updates to all other neighbors (everyone but me)
-                if network != srcif:
+                if source_relationship == CUST and network != srcif:
+                    socket.send(sending_msg)
+                elif self.relations[network] not in [PROV,PEER] and network != srcif:
                     socket.send(sending_msg)
         return True
 
