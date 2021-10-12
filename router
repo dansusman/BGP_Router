@@ -140,7 +140,7 @@ class Router:
         return False
 
     def update(self, srcif, packet) -> bool:
-        """	handle update packets	"""
+        """    handle update packets    """
         packet["srcif"] = srcif
         self.updates.append(packet)
         packetMessage = packet[MESG]
@@ -161,29 +161,17 @@ class Router:
             ORIG: packetMessage[ORIG]
         })
         source_relationship = self.relations[srcif]
-        count = 0
-        # for neighbor in self.sockets:
-        #     count+=1
         copy_of_packet = copy.deepcopy(packet)
-        # update_source = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
-        copy_of_packet[SRCE], copy_of_packet[DEST] = copy_of_packet[DEST], copy_of_packet[SRCE]
+        copy_of_packet[SRCE] = packet[DEST]
         copy_of_packet[MESG][APTH].append(int(self.asn))
-        sending_msg = json.dumps(copy_of_packet).encode()
-        if source_relationship == CUST:
-            for neighbor in self.sockets.keys():
-                if neighbor != packet[SRCE]:
-                    self.sockets[neighbor].sendall(sending_msg)
-        else:
-            for neighbor in self.sockets.keys():
-                if self.relations[neighbor] == CUST and neighbor != packet[SRCE]:
-                    self.sockets[neighbor].sendall(sending_msg)
-            #     # send updates to all other neighbors (everyone but me)
-            #     if neighbor != srcif:
-            #         print(count, sending_msg)
-            #         self.sockets[neighbor].sendall(sending_msg)
-            # elif self.relations[neighbor] == CUST:
-            #     self.sockets[neighbor].sendall(sending_msg)
-        return True 
+        for (network, socket) in self.sockets.items():
+            copy_of_packet[DEST] = network
+            sending_msg = json.dumps(copy_of_packet).encode()
+            if source_relationship == CUST or self.relations[network] == CUST:
+                # send updates to all other neighbors (everyone but me)
+                if network != srcif:
+                    socket.sendall(sending_msg)
+        return True
 
     def revoke(self, packet) -> bool:
         """	handle revoke packets	"""
