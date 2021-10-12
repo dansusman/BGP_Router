@@ -169,7 +169,8 @@ class Router:
             sending_msg = json.dumps(copy_of_packet).encode()
             if source_relationship == CUST or self.relations[network] == CUST:
                 # send updates to all other neighbors (everyone but me)
-                socket.sendall(sending_msg)
+                if network != packet[SRCE]:
+                    socket.sendall(sending_msg)
         return True 
 
     def revoke(self, packet) -> bool:
