@@ -266,11 +266,14 @@ class Router:
         dump_msg[SRCE] = packet[DEST]
         dump_msg[DEST] = packet[SRCE]
         dump_msg[TYPE] = TABL
-        dump_msg[MESG] = self.forwarding_table
+        dump_msg[MESG] = {}
+        dump_msg[MESG][NTWK] = self.forwarding_table[NTWK]
+        dump_msg[MESG][NMSK] = self.forwarding_table[NMSK]
+        dump_msg[MESG][PEER] = self.forwarding_table[PEER]
         sending_msg = json.dumps(dump_msg).encode()
         # send table response to original source (who requested the dump data)
         print(sending_msg)
-        self.sockets[packet[SRCE]].sendall(sending_msg)
+        self.sockets[packet[DEST]].sendall(sending_msg)
         return True
 
     def handle_packet(self, srcif, packet) -> bool:
@@ -287,10 +290,17 @@ class Router:
         else:
             return False
 
-    def send_error(self, conn, msg):
+    def send_error(self, conn, msg, srcif):
         """ Send a no_route error message """
-        # TODO
-        return
+        message = {}
+        message[SRCE] = srcif
+        message[DEST] = msg[SRCE]
+        message[TYPE] = NRTE
+        message[MESG] = {}
+        sending_msg = json.dumps(message).encode()
+        self.sockets[conn].sendall(sending_msg)
+
+        return True 
 
     def run(self):
         while True:
@@ -307,7 +317,7 @@ class Router:
                             srcif = sock
                     msg = json.loads(k)
                     if not self.handle_packet(srcif, msg):
-                        self.send_error(conn, msg)
+                        self.send_error(conn, msg, srcif)
                 else:
                     return
 
