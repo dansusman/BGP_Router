@@ -163,6 +163,9 @@ class Router:
         source_relationship = self.relations[srcif]
         for neighbor in self.sockets:
             copy_of_packet = copy.deepcopy(packet)
+            update_source = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
+            copy_of_packet[SRCE] = update_source
+            copy_of_packet[DEST] = neighbor
             copy_of_packet[MESG][APTH].append(int(self.asn))
             sending_msg = json.dumps(copy_of_packet).encode()
             if source_relationship == CUST:
