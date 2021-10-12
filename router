@@ -161,20 +161,19 @@ class Router:
             ORIG: packetMessage[ORIG]
         })
         source_relationship = self.relations[srcif]
-        copy_of_packet = copy.deepcopy(packet)
-        copy_of_packet[MESG][APTH].append(int(self.asn))
-        sending_msg = json.dumps(copy_of_packet).encode()
-        if source_relationship == CUST:
-            for neighbor in self.sockets.keys():
+        for neighbor in self.sockets:
+            copy_of_packet = copy.deepcopy(packet)
+            copy_of_packet[MESG][APTH].append(int(self.asn))
+            sending_msg = json.dumps(copy_of_packet).encode()
+            if source_relationship == CUST:
+                # send updates to all other neighbors (everyone but me)
                 if neighbor != srcif:
+                    print(sending_msg)
                     self.sockets[neighbor].sendall(sending_msg)
-        else:
-            for neighbor in self.sockets.keys():
-                if neighbor != srcif and self.relations[neighbor] == CUST:
-                    self.sockets[neighbor].sendall(sending_msg)
+            elif self.relations[neighbor] == CUST:
+                self.sockets[neighbor].sendall(sending_msg)
+        return True 
 
-        return True
-    
     def revoke(self, packet) -> bool:
         """	handle revoke packets	"""
         # TODO
