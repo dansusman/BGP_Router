@@ -170,7 +170,7 @@ class Router:
             if source_relationship == CUST or self.relations[network] == CUST:
                 # send updates to all other neighbors (everyone but me)
                 if network != srcif:
-                    socket.sendto(sending_msg, copy_of_packet[DEST])
+                    socket.send(sending_msg)
         return True
 
     def revoke(self, packet) -> bool:
