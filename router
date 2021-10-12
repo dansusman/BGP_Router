@@ -165,18 +165,17 @@ class Router:
         # for neighbor in self.sockets:
         #     count+=1
         copy_of_packet = copy.deepcopy(packet)
-        update_source = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
-        copy_of_packet[SRCE] = packet[DEST]
-        copy_of_packet[DEST] = update_source
+        # update_source = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
+        copy_of_packet[SRCE], copy_of_packet[DEST] = copy_of_packet[DEST], copy_of_packet[SRCE]
         copy_of_packet[MESG][APTH].append(int(self.asn))
         sending_msg = json.dumps(copy_of_packet).encode()
         if source_relationship == CUST:
             for neighbor in self.sockets.keys():
-                if neighbor != srcif:
+                if neighbor != packet[SRCE]:
                     self.sockets[neighbor].sendall(sending_msg)
         else:
             for neighbor in self.sockets.keys():
-                if self.relations[neighbor] == CUST:
+                if self.relations[neighbor] == CUST and neighbor != packet[SRCE]:
                     self.sockets[neighbor].sendall(sending_msg)
             #     # send updates to all other neighbors (everyone but me)
             #     if neighbor != srcif:
