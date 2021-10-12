@@ -112,7 +112,7 @@ class Router:
         """	Select the best route for a given address	"""
         # TODO
         peer = None
-        routes = lookup_routers(daddr)
+        routes = self.lookup_routers(daddr)
         # Rules go here
         if routes:
             # 1. Highest Preference
