@@ -174,7 +174,7 @@ class Router:
                 # send updates to all other neighbors (everyone but me)
                 if neighbor != srcif:
                     print(count, sending_msg)
-                    self.sockets[neighbor].sendall(sending_msg)
+                    self.sockets[update_source].sendall(sending_msg)
             elif self.relations[neighbor] == CUST:
                 self.sockets[neighbor].sendall(sending_msg)
         return True 
@@ -226,7 +226,6 @@ class Router:
                     return
                 if k:
                     for sock in self.sockets:
-                        print(sock)
                         if self.sockets[sock] == conn:
                             srcif = sock
                     msg = json.loads(k)
