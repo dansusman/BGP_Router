@@ -155,7 +155,7 @@ class Router:
                 outroutes = [route]
             elif self.compare_ip(min_ip, r_ip) == 0:
                 outroutes.append(route)
-                
+
         return outroutes
 
     def compare_ip(curr_ip, peer):
@@ -224,17 +224,33 @@ class Router:
         })
         source_relationship = self.relations[srcif]
         copy_of_packet = copy.deepcopy(packet)
-        copy_of_packet[SRCE] = packet[DEST]
+        # copy_of_packet[SRCE] = packet[DEST]
         copy_of_packet[MESG][APTH].append(int(self.asn))
-        for (network, socket) in self.sockets.items():
-            copy_of_packet[DEST] = ('.').join(network.split('.', 3)[:3]) + '.1'
-            sending_msg = json.dumps(copy_of_packet).encode()
-            if source_relationship == CUST or self.relations[network] == CUST:
-                # send updates to all other neighbors (everyone but me)
-                if source_relationship == CUST and network != srcif:
-                    socket.send(sending_msg)
-                elif self.relations[network] not in [PROV,PEER] and network != srcif:
-                    socket.send(sending_msg)
+        # for (network, socket) in self.sockets.items():
+        #     copy_of_packet[DEST] = ('.').join(network.split('.', 3)[:3]) + '.1'
+        #     sending_msg = json.dumps(copy_of_packet).encode()
+        #     if source_relationship == CUST or self.relations[network] == CUST:
+        #         # send updates to all other neighbors (everyone but me)
+        #         if source_relationship == CUST and network != srcif:
+        #             socket.send(sending_msg)
+        #         elif self.relations[network] not in [PROV,PEER] and network != srcif:
+        #             socket.send(sending_msg)
+
+        if source_relationship == CUST:
+            for neighbor in self.sockets.keys():
+                if neighbor != srcif:
+                    copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
+                    copy_of_packet[DEST] = neighbor
+                    sending_msg = json.dumps(copy_of_packet).encode()
+                    socket.sendall(sending_msg)
+        else:
+            for neighbor in self.sockets.keys():
+                 if neighbor != srcif and self.relations[neighbor] not in [PROV,PEER]:
+                    copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
+                    copy_of_packet[DEST] = neighbor
+                    sending_msg = json.dumps(copy_of_packet).encode()
+                    socket.sendall(sending_msg)
+
         return True
 
     def revoke(self, packet) -> bool:
