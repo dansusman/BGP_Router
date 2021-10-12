@@ -161,7 +161,9 @@ class Router:
             ORIG: packetMessage[ORIG]
         })
         source_relationship = self.relations[srcif]
+        count = 0
         for neighbor in self.sockets:
+            count+=1
             copy_of_packet = copy.deepcopy(packet)
             update_source = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
             copy_of_packet[SRCE] = packet[DEST]
@@ -171,7 +173,7 @@ class Router:
             if source_relationship == CUST:
                 # send updates to all other neighbors (everyone but me)
                 if neighbor != srcif:
-                    print(sending_msg)
+                    print(count, sending_msg)
                     self.sockets[neighbor].sendall(sending_msg)
             elif self.relations[neighbor] == CUST:
                 self.sockets[neighbor].sendall(sending_msg)
