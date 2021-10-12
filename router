@@ -51,7 +51,7 @@ class Router:
     forwarding_table = None
 
     def __init__(self, asn: str, networks: List[Dict[str, str]]):
-        # map from IP address to list of IP addresses it can reach
+        # map from port to list of IP addresses it can reach
         self.routes = {}
         # cached copy of update announcement (whole packets)
         self.updates = []
@@ -79,34 +79,96 @@ class Router:
         outroutes = []
         return outroutes
 
-    def get_shortest_as_path(self, routes):
+    def get_shortest_as_path(self, routes) -> List[str]:
         """ select the route with the shortest AS Path """
-        # TODO
-        outroutes = []
-        return outroutes
+        if len(routes) <= 0:
+            return []
+        
+        shortest_path = [routes[0]]
+        min_path = len(routes[0][APTH])
+        for route in routes:
+            r_len = len(route[APTH])
+            if r_len < min_path:
+                min_path = r_len
+                shortest_path = [route]
+            elif r_len == min_path:
+                shortest_path.append(route)
+     
+        return shortest_path
             
     def get_highest_preference(self, routes):
-        """ select the route with the shortest AS Path """
-        # TODO
-        outroutes = []
-        return outroutes
+        """ select the route with the highesr localPref """
+        if len(routes) <= 0:
+            return []
+        
+        highest_lprf_route = [routes[0]]
+        highest_lprf = int(routes[0][LPRF])
+        for route in routes:
+            r_lprf = int(route[LPRF])
+            if r_lprf > highest_lprf:
+                highest_lprf = r_lprf
+                highest_lprf_route = [route]
+            elif r_lprf == highest_lprf:
+                highest_lprf_route.append(route)
+     
+        return highest_lprf_route
          
     def get_self_origin(self, routes):
         """ select self originating routes """
-        # TODO
-        outroutes = []
-        return outroutes
+        if len(routes) <= 0:
+            return []
+        
+        return list(filter(lambda r: (self.forwarding_table[r][SORG] == "True"), routes))
 
     def get_origin_routes(self, routes):
         """ select origin routes: IGP > EGP > UNK """
-        # TODO
-        outroutes = []
-        return outroutes
+        igp_routes = list(filter(lambda r: (self.forwarding_table[r][ORIG] == "IGP"), routes))
+        egp_routes = list(filter(lambda r: (self.forwarding_table[r][ORIG] == "EGP"), routes))
+        unk_routes = list(filter(lambda r: (self.forwarding_table[r][ORIG] == "UNK"), routes))
+
+        if igp_routes != []:
+            return igp_routes
+        elif egp_routes != []:
+            return egp_routes
+
+        return unk_routes
 
     def filter_relationships(self, srcif, routes):
         """ Don't allow Peer->Peer, Peer->Prov, or Prov->Peer forwards """
         outroutes = []
+        rel = self.relations[srcif]
+        for route in routes:
+            opp_rel = self.relations[route[NTWK]]
+            if (rel == CUST or opp_rel == CUST) or (rel == PROV and opp_rel == PROV):
+                outroutes.append(route)
+
         return outroutes
+        
+    def get_lowest_ip(self, routes):
+        """ select route with the lowest ip address """
+        outroutes = []
+        min_ip = "255.255.255.255"
+        for route in routes:
+            r_ip = route[PEER]
+            if self.compare_ip(min_ip, r_ip) == 1:
+                min_ip = r_ip
+                outroutes = [route]
+            elif self.compare_ip(min_ip, r_ip) == 0:
+                outroutes.append(route)
+                
+        return outroutes
+
+    def compare_ip(curr_ip, peer):
+        curr_nums = map(int, curr_ip.split("."))
+        peer_nums = map(int, peer.split("."))
+
+        for i in range(4):
+            if curr_nums[i] > peer_nums[i]:
+                return 1
+            elif curr_nums[i] < peer_nums[i]:
+                return -1
+            
+        return 0
 
     def get_route(self, srcif, daddr):
         """	Select the best route for a given address	"""
@@ -124,7 +186,7 @@ class Router:
             # 4. IGP > EGP > UNK
             routes = self.get_origin_routes(routes)
             # 5. Lowest IP Address
-            # TODO
+            routes = self.get_lowest_ip(routes)
             # Final check: enforce peering relationships
             routes = self.filter_relationships(srcif, routes)
         return self.sockets[peer] if peer else None
