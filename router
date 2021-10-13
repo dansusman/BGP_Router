@@ -133,24 +133,32 @@ class Router:
     def get_self_origin(self, routes):
         """ select self originating routes """
         print(routes)
+        outroutes = []
 
         if len(routes) <= 0:
             return []
-        
-        return list(filter(lambda r: (self.forwarding_table[r][SORG] == "True"), routes))
+        for route in routes:
+            if route[SORG]:
+                outroutes.append(route)
+        return outroutes
 
     def get_origin_routes(self, routes):
         """ select origin routes: IGP > EGP > UNK """
-        igp_routes = list(filter(lambda r: (self.forwarding_table[r][ORIG] == "IGP"), routes))
-        egp_routes = list(filter(lambda r: (self.forwarding_table[r][ORIG] == "EGP"), routes))
-        unk_routes = list(filter(lambda r: (self.forwarding_table[r][ORIG] == "UNK"), routes))
+        outroutes = []
+        current_best = "UNK"
 
-        if igp_routes != []:
-            return igp_routes
-        elif egp_routes != []:
-            return egp_routes
+        for route in routes:
+            if route[ORIG] == current_best:
+                outroutes.append(route)
+            elif (route[ORIG] == "EGP" and current_best != "IGP") or route[ORIG] == "IGP":
+                # if the current best is worse than EGP and the current is EGP,
+                # update best and start a new list
+                # if the current best is worse than IGP and the current is IGP,
+                # update best and start a new list
+                current_best = route[ORIG]
+                outroutes = [route]
 
-        return unk_routes
+        return outroutes
 
     def filter_relationships(self, srcif, routes):
         """ Don't allow Peer->Peer, Peer->Prov, or Prov->Peer forwards """
