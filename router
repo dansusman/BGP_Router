@@ -87,7 +87,7 @@ class Router:
                 outroutes.append(route)
         return outroutes
 
-    def and_addresses(daddr: str, other_addr: str) -> str:
+    def and_addresses(self, daddr: str, other_addr: str) -> str:
         daddr_sept = daddr.split(".")
         other_addr_sept = other_addr.split(".")
         all_anded = []
