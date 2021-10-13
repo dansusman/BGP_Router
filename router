@@ -190,7 +190,7 @@ class Router:
     def get_route(self, srcif, daddr):
         """	Select the best route for a given address	"""
         # TODO
-        routes = self.lookup_routers(daddr)
+        routes = self.lookup_routes(daddr)
         # Rules go here
         if routes:
             # 1. Highest Preference
@@ -290,8 +290,7 @@ class Router:
         """	dispatches a packet """
         typeOfPacket = packet["type"]
         if typeOfPacket == DATA:
-            # return self.forward(srcif, packet)
-            return self.send_error(srcif, packet)
+            return self.forward(srcif, packet)
         elif typeOfPacket == DUMP:
             return self.dump(packet)
         elif typeOfPacket == UPDT:
@@ -310,7 +309,6 @@ class Router:
         message[MESG] = {}
         sending_msg = json.dumps(message).encode()
         self.sockets[conn].sendall(sending_msg)
-
         return True 
 
     def run(self):
