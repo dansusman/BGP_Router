@@ -165,10 +165,9 @@ class Router:
         outroutes = []
         rel = self.relations[srcif]
         for route in routes:
-            opp_rel = self.relations[route[NTWK]]
+            opp_rel = self.relations[route[PEER]]
             if (rel == CUST or opp_rel == CUST) or (rel == PROV and opp_rel == PROV):
                 outroutes.append(route)
-
         return outroutes
         
     def get_lowest_ip(self, routes):
@@ -266,7 +265,6 @@ class Router:
                     self.sockets[neighbor].sendall(sending_msg)
         else:
             for neighbor in self.sockets.keys():
-                print("beightbor stuff:", self.relations[neighbor], neighbor)
                 if neighbor != srcif and self.relations[neighbor] not in [PROV,PEER]:
                     copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
                     copy_of_packet[DEST] = neighbor
