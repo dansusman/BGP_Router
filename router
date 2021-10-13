@@ -287,10 +287,8 @@ class Router:
         copy_of_packet[MESG][NTWK] = self.forwarding_table[NTWK]
         copy_of_packet[MESG][NMSK] = self.forwarding_table[NMSK]
         copy_of_packet[MESG][PEER] = self.forwarding_table[PEER]
-        print(copy_of_packet)
         sending_msg = json.dumps(copy_of_packet).encode()
         # send table response to original source (who requested the dump data)
-        print("HELLLLLLLLLLO!!!!!!!!: ", sending_msg)
         self.sockets[copy_of_packet[DEST]].sendall(sending_msg)
         return True
 
@@ -300,8 +298,10 @@ class Router:
         if typeOfPacket == DATA:
             return self.forward(srcif, packet)
         elif typeOfPacket == DUMP:
+            print("got here")
             return self.dump(packet)
         elif typeOfPacket == UPDT:
+            print("got update here")
             return self.update(srcif, packet)
         elif typeOfPacket == RVKE:
             return self.revoke(packet)
