@@ -280,6 +280,7 @@ class Router:
 
     def dump(self, packet) -> bool:
         """Handles dump table requests by crafting a table message."""
+        print(packet, "SDLFJSLKFSDJLKFLSDKFSDJKFLKSFJKSDJFKJKDSFSJDKF")
         copy_of_packet = copy.deepcopy(packet)
         copy_of_packet[SRCE] = packet[DEST]
         copy_of_packet[DEST] = packet[SRCE]
@@ -298,10 +299,8 @@ class Router:
         if typeOfPacket == DATA:
             return self.forward(srcif, packet)
         elif typeOfPacket == DUMP:
-            print("got here")
             return self.dump(packet)
         elif typeOfPacket == UPDT:
-            print("got update here")
             return self.update(srcif, packet)
         elif typeOfPacket == RVKE:
             return self.revoke(packet)
