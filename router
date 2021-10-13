@@ -266,11 +266,11 @@ class Router:
                     self.sockets[neighbor].sendall(sending_msg)
         else:
             for neighbor in self.sockets.keys():
-                 if neighbor != srcif and self.relations[neighbor] not in [PROV,PEER]:
+                print("beightbor stuff:", self.relations[neighbor], neighbor)
+                if neighbor != srcif and self.relations[neighbor] not in [PROV,PEER]:
                     copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
                     copy_of_packet[DEST] = neighbor
                     sending_msg = json.dumps(copy_of_packet).encode()
-                    print(sending_msg)
                     self.sockets[neighbor].sendall(sending_msg)
 
         return True
