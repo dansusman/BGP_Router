@@ -132,6 +132,8 @@ class Router:
          
     def get_self_origin(self, routes):
         """ select self originating routes """
+        print(routes)
+
         if len(routes) <= 0:
             return []
         
