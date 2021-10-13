@@ -185,7 +185,7 @@ class Router:
 
         return outroutes
 
-    def compare_ip(curr_ip, peer):
+    def compare_ip(self, curr_ip, peer):
         curr_nums = map(int, curr_ip.split("."))
         peer_nums = map(int, peer.split("."))
 
