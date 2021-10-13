@@ -75,7 +75,7 @@ class Router:
 
     def lookup_routes(self, daddr):
         """ Lookup all valid routes for an address """
-        # TODO
+        
         outroutes = []
         return outroutes
 
@@ -193,8 +193,12 @@ class Router:
 
     def forward(self, srcif, packet) -> bool:
         """	Forward a data packet	"""
-        # TODO
-        return False
+        chosen_route = self.get_route(srcif, packet[DEST])
+        if chosen_route is None:
+            self.send_error(srcif, packet)
+            return False
+        self.sockets[chosen_route[PEER]].sendall(json.dumps(packet).encode())
+        return True
 
     def coalesce(self):
         """	coalesce any routes that are right next to each other	"""
@@ -224,17 +228,7 @@ class Router:
         })
         source_relationship = self.relations[srcif]
         copy_of_packet = copy.deepcopy(packet)
-        # copy_of_packet[SRCE] = packet[DEST]
         copy_of_packet[MESG][APTH].append(int(self.asn))
-        # for (network, socket) in self.sockets.items():
-        #     copy_of_packet[DEST] = ('.').join(network.split('.', 3)[:3]) + '.1'
-        #     sending_msg = json.dumps(copy_of_packet).encode()
-        #     if source_relationship == CUST or self.relations[network] == CUST:
-        #         # send updates to all other neighbors (everyone but me)
-        #         if source_relationship == CUST and network != srcif:
-        #             socket.send(sending_msg)
-        #         elif self.relations[network] not in [PROV,PEER] and network != srcif:
-        #             socket.send(sending_msg)
 
         if source_relationship == CUST:
             for neighbor in self.sockets.keys():
@@ -280,7 +274,8 @@ class Router:
         """	dispatches a packet """
         typeOfPacket = packet["type"]
         if typeOfPacket == DATA:
-            return self.forward(srcif, packet)
+            # return self.forward(srcif, packet)
+            return self.send_error(srcif, packet)
         elif typeOfPacket == DUMP:
             return self.dump(packet)
         elif typeOfPacket == UPDT:
@@ -290,10 +285,10 @@ class Router:
         else:
             return False
 
-    def send_error(self, conn, msg, srcif):
+    def send_error(self, conn, msg):
         """ Send a no_route error message """
         message = {}
-        message[SRCE] = srcif
+        message[SRCE] = conn
         message[DEST] = msg[SRCE]
         message[TYPE] = NRTE
         message[MESG] = {}
@@ -317,7 +312,7 @@ class Router:
                             srcif = sock
                     msg = json.loads(k)
                     if not self.handle_packet(srcif, msg):
-                        self.send_error(conn, msg, srcif)
+                        self.send_error(conn, msg)
                 else:
                     return
 
