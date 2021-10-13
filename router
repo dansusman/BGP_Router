@@ -267,7 +267,7 @@ class Router:
         sending_msg = json.dumps(dump_msg).encode()
         # send table response to original source (who requested the dump data)
         print(sending_msg)
-        self.sockets[packet[DEST]].sendall(sending_msg)
+        self.sockets[packet[SRCE]].sendall(sending_msg)
         return True
 
     def handle_packet(self, srcif, packet) -> bool:
