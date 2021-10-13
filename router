@@ -261,7 +261,6 @@ class Router:
                     copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
                     copy_of_packet[DEST] = neighbor
                     sending_msg = json.dumps(copy_of_packet).encode()
-                    print(sending_msg)
                     self.sockets[neighbor].sendall(sending_msg)
         else:
             for neighbor in self.sockets.keys():
@@ -280,14 +279,19 @@ class Router:
 
     def dump(self, packet) -> bool:
         """Handles dump table requests by crafting a table message."""
-        print(packet, "SDLFJSLKFSDJLKFLSDKFSDJKFLKSFJKSDJFKJKDSFSJDKF")
         copy_of_packet = copy.deepcopy(packet)
         copy_of_packet[SRCE] = packet[DEST]
+        print(copy_of_packet, "1AAAAAA")
         copy_of_packet[DEST] = packet[SRCE]
+        print(copy_of_packet, "2AAAAAA")
         copy_of_packet[TYPE] = TABL
+        print(copy_of_packet, "3AAAAAA")
         copy_of_packet[MESG][NTWK] = self.forwarding_table[NTWK]
+        print(copy_of_packet, "4AAAAAA")
         copy_of_packet[MESG][NMSK] = self.forwarding_table[NMSK]
+        print(copy_of_packet, "5AAAAAA")
         copy_of_packet[MESG][PEER] = self.forwarding_table[PEER]
+        print(copy_of_packet, "6AAAAAA")
         sending_msg = json.dumps(copy_of_packet).encode()
         # send table response to original source (who requested the dump data)
         self.sockets[copy_of_packet[DEST]].sendall(sending_msg)
