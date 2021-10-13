@@ -280,18 +280,17 @@ class Router:
 
     def dump(self, packet) -> bool:
         """Handles dump table requests by crafting a table message."""
-        dump_msg = {}
-        dump_msg[SRCE] = packet[DEST]
-        dump_msg[DEST] = packet[SRCE]
-        dump_msg[TYPE] = TABL
-        dump_msg[MESG] = {}
-        dump_msg[MESG][NTWK] = self.forwarding_table[NTWK]
-        dump_msg[MESG][NMSK] = self.forwarding_table[NMSK]
-        dump_msg[MESG][PEER] = self.forwarding_table[PEER]
-        sending_msg = json.dumps(dump_msg).encode()
+        copy_of_packet = copy.deepcopy(packet)
+        copy_of_packet[SRCE] = packet[DEST]
+        copy_of_packet[DEST] = packet[SRCE]
+        copy_of_packet[TYPE] = TABL
+        copy_of_packet[MESG][NTWK] = self.forwarding_table[NTWK]
+        copy_of_packet[MESG][NMSK] = self.forwarding_table[NMSK]
+        copy_of_packet[MESG][PEER] = self.forwarding_table[PEER]
+        sending_msg = json.dumps(copy_of_packet).encode()
         # send table response to original source (who requested the dump data)
-        print(sending_msg)
-        self.sockets[packet[SRCE]].sendall(sending_msg)
+        print("HELLLLLLLLLLO!!!!!!!!: ", sending_msg)
+        self.sockets[copy_of_packet[DEST]].sendall(sending_msg)
         return True
 
     def handle_packet(self, srcif, packet) -> bool:
