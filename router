@@ -287,6 +287,7 @@ class Router:
         copy_of_packet[MESG][NTWK] = self.forwarding_table[NTWK]
         copy_of_packet[MESG][NMSK] = self.forwarding_table[NMSK]
         copy_of_packet[MESG][PEER] = self.forwarding_table[PEER]
+        print(copy_of_packet)
         sending_msg = json.dumps(copy_of_packet).encode()
         # send table response to original source (who requested the dump data)
         print("HELLLLLLLLLLO!!!!!!!!: ", sending_msg)
