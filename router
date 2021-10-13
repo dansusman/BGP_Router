@@ -186,8 +186,8 @@ class Router:
         return outroutes
 
     def compare_ip(self, curr_ip, peer):
-        curr_nums = map(int, curr_ip.split("."))
-        peer_nums = map(int, peer.split("."))
+        curr_nums = list(map(int, curr_ip.split(".")))
+        peer_nums = list(map(int, peer.split(".")))
 
         for i in range(4):
             if curr_nums[i] > peer_nums[i]:
