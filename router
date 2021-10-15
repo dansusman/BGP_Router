@@ -11,6 +11,8 @@ from typing import Dict, List
 #DEBUG = True
 DEBUG = False
 
+
+# Parse Command Line for ASN, and networks (used in Router creation)
 parser = argparse.ArgumentParser(description='route packets')
 parser.add_argument('asn', type=int, help="AS Number")
 parser.add_argument('networks', metavar='networks', type=str, nargs='+', help="networks")
@@ -49,6 +51,9 @@ PROV = "prov"
 ##########################################################################################
 
 class Router:
+    """Main Router class, which handles the bulk of the BGP Router
+    functionality.
+    """
     routes = None
     updates = None
     relations = None
@@ -56,6 +61,10 @@ class Router:
     forwarding_table = None
 
     def __init__(self, asn: str, networks: List[Dict[str, str]]):
+        """Initializes a new Router object, given an Autonomous System Number
+        and a list of network objects in the form of a Python dictionary from
+        string to string.
+        """
         # map from port to list of IP addresses it can reach
         self.routes = {}
         # cached copy of update announcement (whole packets)
@@ -72,14 +81,17 @@ class Router:
             network, relation = relationship.split("-")
             if DEBUG: 
                 print("Starting socket for", network, relation)
+            # start a new UNIX domain socket
             self.sockets[network] = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
             self.sockets[network].setblocking(0)
+            # connect UNIX domain socket to specified network
             self.sockets[network].connect(network)
+            # add entry to relations map, mapping given network IP to relation in Router
             self.relations[network] = relation
         return
 
     def lookup_routes(self, daddr):
-        """ Lookup all valid routes for an address """
+        """Lookup all valid routes for a given address."""
         outroutes = []
         for route in self.forwarding_table:
             anded_address = self.and_addresses(daddr, route[NMSK])
@@ -88,21 +100,32 @@ class Router:
         return outroutes
 
     def and_addresses(self, daddr: str, other_addr: str) -> str:
+        """Bitwise AND operation for two given IP Addresses."""
+        # split both given IPs into arrays of their int values
+        # (separate on periods)
         daddr_sept = daddr.split(".")
         other_addr_sept = other_addr.split(".")
+        # accumulate anded addresses
         all_anded = []
+        # iterate parallelly through daddr and other_addr
+        # bitwise AND'ing them together
         for i in range(len(daddr_sept)):
             all_anded.append(str(int(daddr_sept[i]) & int(other_addr_sept[i])))
+        # reformat results into valid IP address format
         return ft.reduce(lambda x, y: x + "." + y, all_anded)
 
 
     def get_shortest_as_path(self, routes) -> List[str]:
-        """ select the route with the shortest AS Path """
+        """Select the route with the shortest AS Path."""
         if len(routes) <= 0:
             return []
-        
+        # start shortest path as the first route's path
         shortest_path = [routes[0]]
+        # start the length of the shortest path as that
+        # of the first route's path
         min_path = len(routes[0][APTH])
+        # iterate through all routes in given list and
+        # find the shortest AS Path
         for route in routes:
             r_len = len(route[APTH])
             if r_len < min_path:
@@ -110,16 +133,19 @@ class Router:
                 shortest_path = [route]
             elif r_len == min_path:
                 shortest_path.append(route)
-     
         return shortest_path
             
     def get_highest_preference(self, routes):
-        """ select the route with the highesr localPref """
+        """Select the route with the highest localPref."""
         if len(routes) <= 0:
             return []
-        
+        # start highest lpref route as the first route's path
         highest_lprf_route = [routes[0]]
+        # start the highest lpref as that
+        # of the first route's path
         highest_lprf = int(routes[0][LPRF])
+        # iterate through all routes in given list and
+        # find the one with the highest local pref
         for route in routes:
             r_lprf = int(route[LPRF])
             if r_lprf > highest_lprf:
@@ -127,26 +153,26 @@ class Router:
                 highest_lprf_route = [route]
             elif r_lprf == highest_lprf:
                 highest_lprf_route.append(route)
-     
         return highest_lprf_route
          
     def get_self_origin(self, routes):
-        """ select self originating routes """
-        print(routes)
-        outroutes = []
-
+        """Select all self originating routes."""
         if len(routes) <= 0:
             return []
+        outroutes = []
         for route in routes:
             if route[SORG]:
                 outroutes.append(route)
         return outroutes
 
     def get_origin_routes(self, routes):
-        """ select origin routes: IGP > EGP > UNK """
+        """Select origin routes with the following 
+        ranking system: IGP > EGP > UNK.
+        """
         outroutes = []
         current_best = "UNK"
-
+        # iterate through routes in given list updating the current best if a better
+        # option is discovered
         for route in routes:
             if route[ORIG] == current_best:
                 outroutes.append(route)
@@ -161,7 +187,7 @@ class Router:
         return outroutes
 
     def filter_relationships(self, srcif, routes):
-        """ Don't allow Peer->Peer, Peer->Prov, or Prov->Peer forwards """
+        """Don't allow Peer->Peer, Peer->Prov, or Prov->Peer forwards."""
         outroutes = []
         rel = self.relations[srcif]
         for route in routes:
@@ -171,7 +197,7 @@ class Router:
         return outroutes
         
     def get_lowest_ip(self, routes):
-        """ select route with the lowest ip address """
+        """Select route with the lowest ip address."""
         outroutes = []
         min_ip = "255.255.255.255"
         for route in routes:
@@ -184,10 +210,15 @@ class Router:
 
         return outroutes
 
-    def compare_ip(self, curr_ip, peer):
+    def compare_ip(self, curr_ip: str, peer: str):
+        """Compare the two given IP Addresses. Return
+        positive 1 if the former is greater than the latter, -1 if
+        the latter is greater than the former, and 0 if equal.
+        """
         curr_nums = list(map(int, curr_ip.split(".")))
         peer_nums = list(map(int, peer.split(".")))
 
+        # IPv4 have four 8-bit fields separated by periods (dotted quad)
         for i in range(4):
             if curr_nums[i] > peer_nums[i]:
                 return 1
@@ -197,8 +228,7 @@ class Router:
         return 0
 
     def get_route(self, srcif, daddr):
-        """	Select the best route for a given address	"""
-        # TODO
+        """Select the best route for a given address, based on the priority ranking system."""
         routes = self.lookup_routes(daddr)
         # Rules go here
         if routes:
@@ -217,7 +247,7 @@ class Router:
         return routes[0]
 
     def forward(self, srcif, packet) -> bool:
-        """	Forward a data packet	"""
+        """Forward a data packet."""
         chosen_route = self.get_route(srcif, packet[DEST])
         if chosen_route is None:
             self.send_error(srcif, packet)
@@ -231,10 +261,15 @@ class Router:
         return False
 
     def update(self, srcif, packet) -> bool:
-        """    handle update packets    """
+        """Handle update packets."""
+        # attach SRCIF in case needed later
         packet["srcif"] = srcif
+        # add packet to list of updates (cache for later)
         self.updates.append(packet)
         packetMessage = packet[MESG]
+        # add a new entry into forwarding table
+        # storing network, netmask, peer, localPref,
+        # selfOrigin, AS Path, and Origin information
         self.forwarding_table.append({
             # NTWK
             NTWK: packetMessage[NTWK],
@@ -252,9 +287,11 @@ class Router:
             ORIG: packetMessage[ORIG]
         })
         source_relationship = self.relations[srcif]
+        # create a deep copy of this update packet to send to neighbors
         copy_of_packet = copy.deepcopy(packet)
         copy_of_packet[MESG][APTH].append(int(self.asn))
 
+        # if update received from a customer: send updates to all other neighbors
         if source_relationship == CUST:
             for neighbor in self.sockets.keys():
                 if neighbor != srcif:
@@ -262,6 +299,7 @@ class Router:
                     copy_of_packet[DEST] = neighbor
                     sending_msg = json.dumps(copy_of_packet).encode()
                     self.sockets[neighbor].sendall(sending_msg)
+        # if update received from a peer or a provider: only send updates to your customers
         else:
             for neighbor in self.sockets.keys():
                 if neighbor != srcif and self.relations[neighbor] not in [PROV,PEER]:
@@ -269,7 +307,6 @@ class Router:
                     copy_of_packet[DEST] = neighbor
                     sending_msg = json.dumps(copy_of_packet).encode()
                     self.sockets[neighbor].sendall(sending_msg)
-
         return True
 
     def revoke(self, packet) -> bool:
@@ -279,21 +316,27 @@ class Router:
 
     def dump(self, packet) -> bool:
         """Handles dump table requests by crafting a table message."""
+        # create deep copy of packet
         copy_of_packet = copy.deepcopy(packet)
+        # swap dest and srce of packet
         copy_of_packet[SRCE] = packet[DEST]
         copy_of_packet[DEST] = packet[SRCE]
+        # change type of message to "table"
         copy_of_packet[TYPE] = TABL
         msg_arr = []
+        # iterate through forwarding table and append selected information
+        # into the "msg" field in copy_of_packet
         for route in self.forwarding_table:
             msg_arr.append({NTWK: route[NTWK], NMSK: route[NMSK], PEER: route[PEER]})
         copy_of_packet[MESG] = msg_arr
+        # Convert JSON object to string and encode
         sending_msg = json.dumps(copy_of_packet).encode()
         # send table response to original source (who requested the dump data)
         self.sockets[copy_of_packet[DEST]].sendall(sending_msg)
         return True
 
     def handle_packet(self, srcif, packet) -> bool:
-        """	dispatches a packet """
+        """Dispatches a packet to the correct method."""
         typeOfPacket = packet["type"]
         if typeOfPacket == DATA:
             return self.forward(srcif, packet)
@@ -307,7 +350,7 @@ class Router:
             return False
 
     def send_error(self, conn, msg):
-        """ Send a no_route error message """
+        """Send a no_route error message."""
         message = {}
         message[SRCE] = conn
         message[DEST] = msg[SRCE]
@@ -318,6 +361,7 @@ class Router:
         return True 
 
     def run(self):
+        """The main method that runs the BGP Router program."""
         while True:
             socks = select.select(self.sockets.values(), [], [], 0.1)[0]
             for conn in socks:
