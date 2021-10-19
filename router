@@ -192,7 +192,7 @@ class Router:
         outroutes = []
         rel = self.relations[srcif]
         for route in routes:
-            opp_rel = self.relations[route[PEER]]
+            opp_rel = self.relations[route]
             if (rel == CUST or opp_rel == CUST) or (rel == PROV and opp_rel == PROV):
                 outroutes.append(route)
         return outroutes
