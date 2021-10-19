@@ -288,7 +288,7 @@ class Router:
             # Origin
             ORIG: packetMessage[ORIG]
         })
-        source_relationship = self.relations[srcif]
+        source_relationship = self.relations[packet[SRCE]]
         # create a deep copy of this update packet to send to neighbors
         copy_of_packet = copy.deepcopy(packet)
         copy_of_packet[MESG][APTH].append(int(self.asn))
@@ -296,7 +296,7 @@ class Router:
         # if update received from a customer: send updates to all other neighbors
         if source_relationship == CUST:
             for neighbor in self.sockets.keys():
-                if neighbor != srcif:
+                if neighbor != packet[SRCE]:
                     copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
                     copy_of_packet[DEST] = neighbor
                     sending_msg = json.dumps(copy_of_packet).encode()
@@ -304,7 +304,7 @@ class Router:
         # if update received from a peer or a provider: only send updates to your customers
         else:
             for neighbor in self.sockets.keys():
-                if neighbor != srcif and self.relations[neighbor] not in [PROV,PEER]:
+                if neighbor != packet[SRCE] and self.relations[neighbor] not in [PROV,PEER]:
                     copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
                     copy_of_packet[DEST] = neighbor
                     sending_msg = json.dumps(copy_of_packet).encode()
