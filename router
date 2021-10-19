@@ -190,7 +190,6 @@ class Router:
 
     def filter_relationships(self, srcif, routes):
         """Don't allow Peer->Peer, Peer->Prov, or Prov->Peer forwards."""
-        print(routes)
         outroutes = []
         rel = self.relations[srcif]
         for route in routes:
@@ -233,24 +232,18 @@ class Router:
     def get_route(self, srcif, daddr):
         """Select the best route for a given address, based on the priority ranking system."""
         routes = self.lookup_routes(daddr)
-        print("1", routes)
         # Rules go here
         if routes:
             # 1. Highest Preference
             routes = self.get_highest_preference(routes)
-            print("2", routes)
             # 2. Self Origin
             routes = self.get_self_origin(routes)
-            print("3", routes)
             # 3. Shortest ASPath
             routes = self.get_shortest_as_path(routes)
-            print("4", routes)
             # 4. IGP > EGP > UNK
             routes = self.get_origin_routes(routes)
-            print("5", routes)
             # 5. Lowest IP Address
             routes = self.get_lowest_ip(routes)
-            print("6", routes)
             # Final check: enforce peering relationships
             routes = self.filter_relationships(srcif, routes)
         return routes[0]
