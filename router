@@ -312,9 +312,41 @@ class Router:
         return True
 
     def revoke(self, packet) -> bool:
-        """	handle revoke packets	"""
-        # TODO
+        """Handle revoke packets; remove paths from forwarding table and send
+        revoke messages to neighbors as necessary.
+        """
+        self.updates.append(packet)
+        self.remove_dead_entries(packet)
+
+        # if update received from a customer: send updates to all other neighbors
+        if source_relationship == CUST:
+            for neighbor in self.sockets.keys():
+                if neighbor != srcif:
+                    copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
+                    copy_of_packet[DEST] = neighbor
+                    sending_msg = json.dumps(copy_of_packet).encode()
+                    self.sockets[neighbor].sendall(sending_msg)
+        # if update received from a peer or a provider: only send updates to your customers
+        else:
+            for neighbor in self.sockets.keys():
+                if neighbor != srcif and self.relations[neighbor] not in [PROV,PEER]:
+                    copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
+                    copy_of_packet[DEST] = neighbor
+                    sending_msg = json.dumps(copy_of_packet).encode()
+                    self.sockets[neighbor].sendall(sending_msg)
         return True
+
+    def remove_dead_entries(self, packet):
+        """Remove the dead entries specified in the packet's message block
+        from the forwarding_table.
+        """
+        for dead_entry in packet[MESG]:
+            for route in self.forwarding_table:
+                # dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]
+                dead_and = self.and_addresses(dead_entry[NTWK], dead_entry[NMSK])
+                route_and = self.and_addresses(route[NTWK], route[NMSK])
+                if dead_and == route_and:
+                    self.forwarding_table.remove(route)
 
     def dump(self, packet) -> bool:
         """Handles dump table requests by crafting a table message."""
