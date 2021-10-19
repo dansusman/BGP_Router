@@ -157,12 +157,14 @@ class Router:
          
     def get_self_origin(self, routes):
         """Select all self originating routes."""
-        if len(routes) <= 0:
-            return []
         outroutes = []
+        all_non_self = True
         for route in routes:
             if route[SORG]:
                 outroutes.append(route)
+                all_non_self = False
+        if all_non_self:
+            return routes
         return outroutes
 
     def get_origin_routes(self, routes):
