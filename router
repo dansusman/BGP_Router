@@ -317,7 +317,10 @@ class Router:
         """
         self.updates.append(packet)
         self.remove_dead_entries(packet)
-
+        source_relationship = self.relations[srcif]
+        # create a deep copy of this update packet to send to neighbors
+        copy_of_packet = copy.deepcopy(packet)
+        copy_of_packet[MESG][APTH].append(int(self.asn))
         # if update received from a customer: send updates to all other neighbors
         if source_relationship == CUST:
             for neighbor in self.sockets.keys():
