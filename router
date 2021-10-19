@@ -188,6 +188,7 @@ class Router:
 
     def filter_relationships(self, srcif, routes):
         """Don't allow Peer->Peer, Peer->Prov, or Prov->Peer forwards."""
+        print(routes)
         outroutes = []
         rel = self.relations[srcif]
         for route in routes:
