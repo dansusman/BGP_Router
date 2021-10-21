@@ -269,7 +269,7 @@ class Router:
 
         for route in routes:
             bin_nmsk = '.'.join([bin(int(x)+256)[3:] for x in route[NMSK].split('.')])
-            if not bin_nmsk.contains("01"):
+            if "01" not in bin_nmsk:
                 one_count = bin_nmsk.count("1")
                 if longest_prefix < one_count:
                     longest_prefix = one_count
