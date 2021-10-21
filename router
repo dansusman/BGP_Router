@@ -349,18 +349,6 @@ class Router:
                     self.revoked.append(route)
                     break
 
-    # def find_entry(self, route):
-    #     for entry in self.forwarding_table:
-    #         net_match = route[MESG][NTWK] == entry[NTWK]
-    #         msk_match = route[MESG][NMSK] == entry[NMSK]
-    #         lpref_match = route[MESG][LPRF] == entry[LPRF]
-    #         asp_match = route[MESG][APTH] == entry[APTH]
-    #         or_match = route[MESG][ORIG] == entry[ORIG]
-    #         sor_match = route[MESG][SORG] == entry[SORG]
-    #         if net_match and msk_match and lpref_match and asp_match and or_match and sor_match:
-    #             return entry
-
- 
     def dump(self, packet) -> bool:
         """Handles dump table requests by crafting a table message."""
         # create deep copy of packet
@@ -399,12 +387,12 @@ class Router:
     def send_error(self, conn, msg):
         """Send a no_route error message."""
         message = {}
-        message[SRCE] = conn
-        message[DEST] = msg[SRCE]
+        message[SRCE], message[DEST] = message[DEST], ('.').join(message[SRCE].split('.', 3)[:3]) + '.1'
+        # message[DEST] = msg[SRCE]
         message[TYPE] = NRTE
         message[MESG] = {}
         sending_msg = json.dumps(message).encode()
-        self.sockets[conn].sendall(sending_msg)
+        conn.sendall(sending_msg)
         return True 
 
     def run(self):
