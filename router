@@ -306,7 +306,6 @@ class Router:
         self.remove_dead_entries(packet)
         # create a deep copy of this update packet to send to neighbors
         copy_of_packet = copy.deepcopy(packet)
-        copy_of_packet[MESG][APTH].append(int(self.asn))
         self.forward_to_neighbors(copy_of_packet, packet[SRCE])
         return True
 
