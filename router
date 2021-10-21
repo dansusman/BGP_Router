@@ -140,8 +140,6 @@ class Router:
             
     def get_highest_preference(self, routes):
         """Select the route with the highest localPref."""
-        if len(routes) <= 0:
-            return []
         # start highest lpref route as the first route's path
         highest_lprf_route = [routes[0]]
         # start the highest lpref as that
@@ -235,7 +233,7 @@ class Router:
     def get_route(self, srcif, daddr):
         """Select the best route for a given address, based on the priority ranking system."""
         routes = self.lookup_routes(daddr)
-        routes = self.longest_prefix_match
+        routes = self.longest_prefix_match(routes)
         # Rules go here
         if routes:
             # 1. Highest Preference
@@ -267,7 +265,7 @@ class Router:
 
     def longest_prefix_match(self, routes) :
         outroutes = [routes[0]]
-        longest_prefix = 0;
+        longest_prefix = 0
 
         for route in routes:
             bin_nmsk = '.'.join([bin(int(x)+256)[3:] for x in route[NMSK].split('.')])
