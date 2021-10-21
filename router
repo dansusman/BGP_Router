@@ -260,7 +260,8 @@ class Router:
 
     def coalesce(self):
         """	coalesce any routes that are right next to each other	"""
-        # TODO (this is the most difficult task, save until last)
+        new_forwarding_table = []
+        new_updates = []
         return False
 
     def longest_prefix_match(self, routes) :
