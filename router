@@ -59,6 +59,7 @@ class Router:
     relations = None
     sockets = None
     forwarding_table = None
+    revoked = None
 
     def __init__(self, asn: str, networks: List[Dict[str, str]]):
         """Initializes a new Router object, given an Autonomous System Number
@@ -77,6 +78,8 @@ class Router:
         self.forwarding_table = []
         # this router's Autonomous System Number
         self.asn = asn
+        # accumulating list of revoked routes
+        self.revoked = []
         for relationship in networks:
             network, relation = relationship.split("-")
             if DEBUG: 
@@ -288,27 +291,10 @@ class Router:
             # Origin
             ORIG: packetMessage[ORIG]
         })
-        source_relationship = self.relations[packet[SRCE]]
         # create a deep copy of this update packet to send to neighbors
         copy_of_packet = copy.deepcopy(packet)
         copy_of_packet[MESG][APTH].append(int(self.asn))
-
-        # if update received from a customer: send updates to all other neighbors
-        if source_relationship == CUST:
-            for neighbor in self.sockets.keys():
-                if neighbor != packet[SRCE]:
-                    copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
-                    copy_of_packet[DEST] = neighbor
-                    sending_msg = json.dumps(copy_of_packet).encode()
-                    self.sockets[neighbor].sendall(sending_msg)
-        # if update received from a peer or a provider: only send updates to your customers
-        else:
-            for neighbor in self.sockets.keys():
-                if neighbor != packet[SRCE] and self.relations[neighbor] not in [PROV,PEER]:
-                    copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
-                    copy_of_packet[DEST] = neighbor
-                    sending_msg = json.dumps(copy_of_packet).encode()
-                    self.sockets[neighbor].sendall(sending_msg)
+        self.forward_to_neighbors(copy_of_packet, srcif)
         return True
 
     def revoke(self, packet) -> bool:
@@ -316,11 +302,16 @@ class Router:
         revoke messages to neighbors as necessary.
         """
         self.updates.append(packet)
+        # remove any dead entries from forwarding_table
         self.remove_dead_entries(packet)
-        source_relationship = self.relations[srcif]
         # create a deep copy of this update packet to send to neighbors
         copy_of_packet = copy.deepcopy(packet)
         copy_of_packet[MESG][APTH].append(int(self.asn))
+        self.forward_to_neighbors(copy_of_packet, packet[SRCE])
+        return True
+
+    def forward_to_neighbors(self, packet, srcif):
+        source_relationship = self.relations[srcif]
         # if update received from a customer: send updates to all other neighbors
         if source_relationship == CUST:
             for neighbor in self.sockets.keys():
@@ -337,19 +328,17 @@ class Router:
                     copy_of_packet[DEST] = neighbor
                     sending_msg = json.dumps(copy_of_packet).encode()
                     self.sockets[neighbor].sendall(sending_msg)
-        return True
 
     def remove_dead_entries(self, packet):
         """Remove the dead entries specified in the packet's message block
         from the forwarding_table.
         """
-        for dead_entry in packet[MESG]:
-            for route in self.forwarding_table:
-                # dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]
-                dead_and = self.and_addresses(dead_entry[NTWK], dead_entry[NMSK])
-                route_and = self.and_addresses(route[NTWK], route[NMSK])
-                if dead_and == route_and:
+        for route in self.forwarding_table:
+            for dead_entry in packet[MESG]:
+                if dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]:
                     self.forwarding_table.remove(route)
+                    self.revoked.append(route)
+                    break
 
     def dump(self, packet) -> bool:
         """Handles dump table requests by crafting a table message."""
