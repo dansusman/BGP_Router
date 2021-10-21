@@ -391,7 +391,7 @@ class Router:
         message[TYPE] = NRTE
         message[MESG] = {}
         sending_msg = json.dumps(message).encode()
-        conn.sendall(sending_msg)
+        self.sockets[message[DEST]].sendall(sending_msg)
         return True 
 
     def run(self):
