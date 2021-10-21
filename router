@@ -275,6 +275,10 @@ class Router:
         # storing network, netmask, peer, localPref,
         # selfOrigin, AS Path, and Origin information
         self.forwarding_table.append({
+            # SRC
+            SRCE: packet[SRCE],
+            # DEST
+            DEST: packet[DEST],
             # NTWK
             NTWK: packetMessage[NTWK],
             # NMSK
@@ -335,27 +339,26 @@ class Router:
         from the forwarding_table.
         """
 
-        for route in self.updates:
+        for route in self.forwarding_table:
             for dead_entry in packet[MESG]:
                 sameSource = route[SRCE] == packet[SRCE]
                 sameDest = route[DEST] == packet[DEST]
-                if sameSource and sameDest and dead_entry[NTWK] == route[MESG][NTWK] and dead_entry[NMSK] == route[MESG][NMSK]:
+                if sameSource and sameDest and dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]:
                     print("Removing: ", route)
-                    entry_to_remove = self.find_entry(route)
-                    self.forwarding_table.remove(entry_to_remove)
+                    self.forwarding_table.remove(route)
                     self.revoked.append(route)
                     break
 
-    def find_entry(self, route):
-        for entry in self.forwarding_table:
-            net_match = route[MESG][NTWK] == entry[NTWK]
-            msk_match = route[MESG][NMSK] == entry[NMSK]
-            lpref_match = route[MESG][LPRF] == entry[LPRF]
-            asp_match = route[MESG][APTH] == entry[APTH]
-            or_match = route[MESG][ORIG] == entry[ORIG]
-            sor_match = route[MESG][SORG] == entry[SORG]
-            if net_match and msk_match and lpref_match and asp_match and or_match and sor_match:
-                return entry
+    # def find_entry(self, route):
+    #     for entry in self.forwarding_table:
+    #         net_match = route[MESG][NTWK] == entry[NTWK]
+    #         msk_match = route[MESG][NMSK] == entry[NMSK]
+    #         lpref_match = route[MESG][LPRF] == entry[LPRF]
+    #         asp_match = route[MESG][APTH] == entry[APTH]
+    #         or_match = route[MESG][ORIG] == entry[ORIG]
+    #         sor_match = route[MESG][SORG] == entry[SORG]
+    #         if net_match and msk_match and lpref_match and asp_match and or_match and sor_match:
+    #             return entry
 
  
     def dump(self, packet) -> bool:
