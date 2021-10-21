@@ -316,17 +316,17 @@ class Router:
         if source_relationship == CUST:
             for neighbor in self.sockets.keys():
                 if neighbor != srcif:
-                    copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
-                    copy_of_packet[DEST] = neighbor
-                    sending_msg = json.dumps(copy_of_packet).encode()
+                    packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
+                    packet[DEST] = neighbor
+                    sending_msg = json.dumps(packet).encode()
                     self.sockets[neighbor].sendall(sending_msg)
         # if update received from a peer or a provider: only send updates to your customers
         else:
             for neighbor in self.sockets.keys():
                 if neighbor != srcif and self.relations[neighbor] not in [PROV,PEER]:
-                    copy_of_packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
-                    copy_of_packet[DEST] = neighbor
-                    sending_msg = json.dumps(copy_of_packet).encode()
+                    packet[SRCE] = ('.').join(neighbor.split('.', 3)[:3]) + '.1'
+                    packet[DEST] = neighbor
+                    sending_msg = json.dumps(packet).encode()
                     self.sockets[neighbor].sendall(sending_msg)
 
     def remove_dead_entries(self, packet):
