@@ -258,11 +258,22 @@ class Router:
         self.sockets[chosen_route[PEER]].sendall(json.dumps(packet).encode())
         return True
 
-    def coalesce(self):
-        """	coalesce any routes that are right next to each other	"""
-        new_forwarding_table = []
-        new_updates = []
-        return False
+    def coalesce(self, packet) -> bool:
+        """Coalesce any routes that are right next to each other. Apply
+        aggregation/disaggregation functionality.
+        """
+        have_coalesced = False
+        # at any point if we aggregate or disaggregate, mark have_colesced = True
+        for route in self.forwarding_table:
+            if self.adj_numerically(route, packet) and self.same_attributes(route, packet):
+
+
+        return have_coalesced
+
+    def same_attributes(self, route, packet) -> bool:
+        """Checks if route and packet have all the same attributes (including next hop router)."""
+        msg = packet[MESG]
+        return route[LPRF] == msg[LPRF] and route[SORG] == msg[SORG] and route[APTH] == msg[APTH] and route[ORIG] == msg[ORIG] and route[PEER] == packet[SRCE]
 
     def longest_prefix_match(self, routes) :
         outroutes = [routes[0]]
@@ -287,45 +298,57 @@ class Router:
         # add packet to list of updates (cache for later)
         self.updates.append(packet)
         packetMessage = packet[MESG]
-        # add a new entry into forwarding table
-        # storing network, netmask, peer, localPref,
-        # selfOrigin, AS Path, and Origin information
-        self.forwarding_table.append({
-            # SRC
-            SRCE: packet[SRCE],
-            # DEST
-            DEST: packet[DEST],
-            # NTWK
-            NTWK: packetMessage[NTWK],
-            # NMSK
-            NMSK: packetMessage[NMSK],
-            # PEER IP
-            PEER: packet[SRCE],
-            # Local Pref
-            LPRF: packetMessage[LPRF],
-            # Self Origin
-            SORG: packetMessage[SORG],
-            # AS Path
-            APTH: packetMessage[APTH],
-            # Origin
-            ORIG: packetMessage[ORIG]
-        })
+        # if we don't need to coalesce, add entry to forwarding table
+        if not self.coalesce(packet):
+            # add a new entry into forwarding table
+            # storing network, netmask, peer, localPref,
+            # selfOrigin, AS Path, and Origin information
+            self.forwarding_table.append({
+                # SRCE
+                SRCE: packet[SRCE],
+                # DEST
+                DEST: packet[DEST],
+                # NTWK
+                NTWK: packetMessage[NTWK],
+                # NMSK
+                NMSK: packetMessage[NMSK],
+                # PEER IP
+                PEER: packet[SRCE],
+                # Local Pref
+                LPRF: packetMessage[LPRF],
+                # Self Origin
+                SORG: packetMessage[SORG],
+                # AS Path
+                APTH: packetMessage[APTH],
+                # Origin
+                ORIG: packetMessage[ORIG]
+            })
         # create a deep copy of this update packet to send to neighbors
         copy_of_packet = copy.deepcopy(packet)
         copy_of_packet[MESG][APTH].append(int(self.asn))
         self.forward_to_neighbors(copy_of_packet, srcif)
         return True
 
+    def rebuild_table(self, packet):
+        """Rebuilds our forwarding_table when an update/revocation message
+        is received. Reconstructs table using aggregation/disaggregation.
+        """
+        # create copy of updates thus far
+        curr_updates = copy.deepcopy(self.updates)
+        # wipe updates and forwarding_table
+        self.updates = []
+        self.forwarding_table = []
+
+
+
     def revoke(self, packet) -> bool:
         """Handle revoke packets; remove paths from forwarding table and send
         revoke messages to neighbors as necessary.
         """
+        self.rebuild_table(packet)
         self.updates.append(packet)
         # remove any dead entries from forwarding_table
-        print(self.forwarding_table)
-        print("pacekt:", packet)
         self.remove_dead_entries(packet)
-        print("after", self.forwarding_table)
         # create a deep copy of this update packet to send to neighbors
         copy_of_packet = copy.deepcopy(packet)
         self.forward_to_neighbors(copy_of_packet, packet[SRCE])
@@ -354,13 +377,11 @@ class Router:
         """Remove the dead entries specified in the packet's message block
         from the forwarding_table.
         """
-
         for route in self.forwarding_table:
             for dead_entry in packet[MESG]:
                 sameSource = route[SRCE] == packet[SRCE]
                 sameDest = route[DEST] == packet[DEST]
                 if sameSource and sameDest and dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]:
-                    print("Removing: ", route)
                     self.forwarding_table.remove(route)
                     self.revoked.append(route)
                     break
