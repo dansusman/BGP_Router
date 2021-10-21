@@ -249,13 +249,12 @@ class Router:
             routes = self.get_lowest_ip(routes)
             # Final check: enforce peering relationships
             routes = self.filter_relationships(srcif, routes)
-        return routes[0]
+        return routes[0] if len(routes) > 0 else None
 
     def forward(self, srcif, packet) -> bool:
         """Forward a data packet."""
         chosen_route = self.get_route(srcif, packet[DEST])
         if chosen_route is None:
-            self.send_error(srcif, packet)
             return False
         self.sockets[chosen_route[PEER]].sendall(json.dumps(packet).encode())
         return True
@@ -303,7 +302,10 @@ class Router:
         """
         self.updates.append(packet)
         # remove any dead entries from forwarding_table
+        print(self.forwarding_table)
+        print("pacekt:", packet)
         self.remove_dead_entries(packet)
+        print("after", self.forwarding_table)
         # create a deep copy of this update packet to send to neighbors
         copy_of_packet = copy.deepcopy(packet)
         self.forward_to_neighbors(copy_of_packet, packet[SRCE])
@@ -332,13 +334,30 @@ class Router:
         """Remove the dead entries specified in the packet's message block
         from the forwarding_table.
         """
-        for route in self.forwarding_table:
+
+        for route in self.updates:
             for dead_entry in packet[MESG]:
-                if dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]:
-                    self.forwarding_table.remove(route)
+                sameSource = route[SRCE] == packet[SRCE]
+                sameDest = route[DEST] == packet[DEST]
+                if sameSource and sameDest and dead_entry[NTWK] == route[MESG][NTWK] and dead_entry[NMSK] == route[MESG][NMSK]:
+                    print("Removing: ", route)
+                    entry_to_remove = self.find_entry(route)
+                    self.forwarding_table.remove(entry_to_remove)
                     self.revoked.append(route)
                     break
 
+    def find_entry(self, route):
+        for entry in self.forwarding_table:
+            net_match = route[MESG][NTWK] == entry[NTWK]
+            msk_match = route[MESG][NMSK] == entry[NMSK]
+            lpref_match = route[MESG][LPRF] == entry[LPRF]
+            asp_match = route[MESG][APTH] == entry[APTH]
+            or_match = route[MESG][ORIG] == entry[ORIG]
+            sor_match = route[MESG][SORG] == entry[SORG]
+            if net_match and msk_match and lpref_match and asp_match and or_match and sor_match:
+                return entry
+
+ 
     def dump(self, packet) -> bool:
         """Handles dump table requests by crafting a table message."""
         # create deep copy of packet
@@ -401,7 +420,7 @@ class Router:
                             srcif = sock
                     msg = json.loads(k)
                     if not self.handle_packet(srcif, msg):
-                        self.send_error(conn, msg)
+                        return self.send_error(conn, msg)
                 else:
                     return
 
