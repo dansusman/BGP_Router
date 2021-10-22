@@ -267,28 +267,28 @@ class Router:
                     p_len = self.get_prefix(route) - 1
                 else:
                     p_len = self.get_prefix(route)
-                print("P_LEN", p_len)
                 # convert new prefix length into netmask ip format (255.255.255.0, e.g.)
                 # append (32 - (prefix length)) many 0's -> bin to ip that
                 bin_nmsk = ("1" * p_len).ljust(32, "0")
                 nmsk_ip = self.binary_to_ipv4(bin_nmsk)
-                print(bin_nmsk, nmsk_ip)
                 # make a new entry with ^^^^ NMSK and lower of the two IPs (compare_ip())
                 lower_ip = None
                 if self.compare_ip(route[NTWK], packet[MESG][NTWK]) == 1:
                     lower_ip = packet[MESG][NTWK]
                 else:
                     lower_ip = route[NTWK]
-                print("LOW IP: ", lower_ip)
                 # create new route with original SRCE, DEST and new msg -> NTWK and NMSK
                 copy_of_route = copy.deepcopy(route)
                 copy_of_route[NTWK] = lower_ip
                 copy_of_route[NMSK] = nmsk_ip
-                print("ORIGINAL: ", route, "COPY: ", copy_of_route) 
+                print(copy_of_route)
                 self.forwarding_table.append(copy_of_route)
+                print(self.forwarding_table)
                 # remove both routes from forwarding_table
                 self.forwarding_table.remove(route)
-                self.forwarding_table.remove(packet)
+                print(self.forwarding_table)
+                # self.forwarding_table.remove(packet)
+                print(self.forwarding_table)
                 have_colesced = True
         return have_coalesced
 
@@ -356,7 +356,7 @@ class Router:
         self.updates.append(packet)
         packetMessage = packet[MESG]
         # if we don't need to coalesce, add entry to forwarding table
-        if not coalesce(packet):
+        if not self.coalesce(packet):
             # add a new entry into forwarding table
             # storing network, netmask, peer, localPref,
             # selfOrigin, AS Path, and Origin information
@@ -406,8 +406,6 @@ class Router:
                 # keep all RVKE statements live in updates table
                 self.updates.append(update)
 
-{'src': '192.168.0.2', 'dst': '192.168.0.1', 'network': '192.168.2.0', 'netmask': '255.255.255.0', 'peer': '192.168.0.2', 'localpref': 100, 'selfOrigin': True│   12       "src": "172.168.0.2",
-, 'ASPath': [1], 'origin': 'EGP'}
     def revoke(self, packet) -> bool:
         """Handle revoke packets; remove paths from forwarding table and send
         revoke messages to neighbors as necessary.
@@ -453,6 +451,7 @@ class Router:
         msg_arr = []
         # iterate through forwarding table and append selected information
         # into the "msg" field in copy_of_packet
+        print("from dump: ", self.forwarding_table)
         for route in self.forwarding_table:
             msg_arr.append({NTWK: route[NTWK], NMSK: route[NMSK], PEER: route[PEER]})
         copy_of_packet[MESG] = msg_arr
