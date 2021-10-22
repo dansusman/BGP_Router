@@ -117,7 +117,6 @@ class Router:
         # reformat results into valid IP address format
         return ft.reduce(lambda x, y: x + "." + y, all_anded)
 
-
     def get_shortest_as_path(self, routes) -> List[str]:
         """Select the route with the shortest AS Path."""
         if len(routes) <= 0:
@@ -210,7 +209,6 @@ class Router:
                 outroutes = [route]
             elif self.compare_ip(min_ip, r_ip) == 0:
                 outroutes.append(route)
-
         return outroutes
 
     def compare_ip(self, curr_ip: str, peer: str):
@@ -220,14 +218,12 @@ class Router:
         """
         curr_nums = list(map(int, curr_ip.split(".")))
         peer_nums = list(map(int, peer.split(".")))
-
         # IPv4 have four 8-bit fields separated by periods (dotted quad)
         for i in range(4):
             if curr_nums[i] > peer_nums[i]:
                 return 1
             elif curr_nums[i] < peer_nums[i]:
                 return -1
-            
         return 0
 
     def get_route(self, srcif, daddr):
@@ -266,8 +262,10 @@ class Router:
         # at any point if we aggregate or disaggregate, mark have_colesced = True
         for route in self.forwarding_table:
             if self.adj_numerically(route, packet) and self.same_attributes(route, packet):
-
-
+                # bitwise AND route[NTWK] w/ route[NMSK], packet[NTWK] w/ packet[NMSK]
+                # get current prefix length and subtract 1
+                # add a new entry to forwarding_table with new network and netmask? (only change netmask?)
+                have_colesced = True
         return have_coalesced
 
     def same_attributes(self, route, packet) -> bool:
@@ -275,10 +273,28 @@ class Router:
         msg = packet[MESG]
         return route[LPRF] == msg[LPRF] and route[SORG] == msg[SORG] and route[APTH] == msg[APTH] and route[ORIG] == msg[ORIG] and route[PEER] == packet[SRCE]
 
-    def longest_prefix_match(self, routes) :
+    def adj_numerically(self, route, packet) -> bool:
+        """Checks if route and packet are numerically adjacent."""
+        if route[NMSK] != packet[NMSK]:
+            return False
+        prefix = get_prefix(route)
+        # ensure prefixes are equal
+        if prefix != get_prefix(packet):
+            return False
+        # check if route[NTWK] == packet[NTWK] up to (prefix length - 1)
+        bin_route = '.'.join([bin(int(x)+256)[3:] for x in route[NTWK].split('.')])
+        bin_packet = '.'.join([bin(int(x)+256)[3:] for x in route[NTWK].split('.')])
+        return bin_route[:prefix - 1] == bin_packet[:prefix - 1]
+
+    def get_prefix(self, route):
+        """Gets the prefix value of a given route's netmask."""
+        bin_nmsk = '.'.join([bin(int(x)+256)[3:] for x in route[NMSK].split('.')])
+        if "01" not in bin_nmsk:
+            return bin_nmsk.count("1")
+
+    def longest_prefix_match(self, routes):
         outroutes = [routes[0]]
         longest_prefix = 0
-
         for route in routes:
             bin_nmsk = '.'.join([bin(int(x)+256)[3:] for x in route[NMSK].split('.')])
             if "01" not in bin_nmsk:
@@ -288,7 +304,6 @@ class Router:
                     outroutes = [route]
                 elif longest_prefix < one_count:
                     outroutes.append(route)
-
         return outroutes
 
     def update(self, srcif, packet) -> bool:
