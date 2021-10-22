@@ -263,24 +263,30 @@ class Router:
         for route in self.forwarding_table:
             if self.adj_numerically(route, packet) and self.same_attributes(route, packet):
                 # get current prefix length and subtract 1
-                p_len = self.get_prefix(route) - 1
+                if route[NMSK] != packet[MESG][NMSK] or route[NTWK] != packet[MESG][NTWK]:
+                    p_len = self.get_prefix(route) - 1
+                else:
+                    p_len = self.get_prefix(route)
                 # convert new prefix length into netmask ip format (255.255.255.0, e.g.)
                 # append (32 - (prefix length)) many 0's -> bin to ip that
                 bin_nmsk = ("1" * p_len).ljust(32, "0")
                 nmsk_ip = self.binary_to_ipv4(bin_nmsk)
                 # make a new entry with ^^^^ NMSK and lower of the two IPs (compare_ip())
                 lower_ip = None
-                if compare_ip(route[NTWK], packet[MESG][NTWK]) == 1:
+                if self.compare_ip(route[NTWK], packet[MESG][NTWK]) == 1:
                     lower_ip = packet[MESG][NTWK]
                 else:
                     lower_ip = route[NTWK]
                 # remove both routes from forwarding_table
+                print(self.forwarding_table)
                 self.forwarding_table.remove(route)
+                print(self.forwarding_table)
+                print(packet)
                 self.forwarding_table.remove(packet)
                 # create new route with original SRCE, DEST and new msg -> NTWK and NMSK
                 copy_of_route = copy.deepcopy(route)
-                copy_of_route[MESG][NTWK] = lower_ip
-                copy_of_route[MESG][NMSK] = nmsk_ip
+                copy_of_route[NTWK] = lower_ip
+                copy_of_route[NMSK] = nmsk_ip
                 self.forwarding_table.append(copy_of_route)
                 have_colesced = True
         return have_coalesced
@@ -291,7 +297,7 @@ class Router:
         second = str(int(binary[8:16], 2))
         third = str(int(binary[16:24], 2))
         fourth = str(int(binary[24:32], 2))
-        return ".".join([first, second, third, fourth]
+        return ".".join([first, second, third, fourth])
 
     def same_attributes(self, route, packet) -> bool:
         """Checks if route and packet have all the same attributes (including next hop router)."""
@@ -300,11 +306,11 @@ class Router:
 
     def adj_numerically(self, route, packet) -> bool:
         """Checks if route and packet are numerically adjacent."""
-        if route[NMSK] != packet[NMSK]:
+        if route[NMSK] != packet[MESG][NMSK]:
             return False
-        prefix = get_prefix(route)
+        prefix = self.get_prefix(route)
         # ensure prefixes are equal
-        if prefix != get_prefix(packet):
+        if prefix != self.get_prefix(packet[MESG]):
             return False
         # check if route[NTWK] == packet[NTWK] up to (prefix length - 1)
         bin_route = '.'.join([bin(int(x)+256)[3:] for x in route[NTWK].split('.')])
@@ -388,7 +394,7 @@ class Router:
                 if update[TYPE] == UPDT:
                     sameSource = route[SRCE] == packet[SRCE]
                     sameDest = route[DEST] == packet[DEST]
-                    part_of_dead_entry = sameSource and sameDest and dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]:
+                    part_of_dead_entry = sameSource and sameDest and dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]
                     if not part_of_dead_entry:
                         self.update_table(update)
             # we see a RVKE message that is not related to the current_best
