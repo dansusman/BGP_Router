@@ -285,6 +285,7 @@ class Router:
                 # remove old routes from forwarding_table
                 self.forwarding_table.remove(route)
                 have_coalesced = True
+                self.coalesce(route)
         return have_coalesced
 
     def binary_to_ipv4(self, binary):
