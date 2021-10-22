@@ -229,9 +229,9 @@ class Router:
     def get_route(self, srcif, daddr):
         """Select the best route for a given address, based on the priority ranking system."""
         routes = self.lookup_routes(daddr)
-        routes = self.longest_prefix_match(routes)
         # Rules go here
         if routes:
+            routes = self.longest_prefix_match(routes)
             # 1. Highest Preference
             routes = self.get_highest_preference(routes)
             # 2. Self Origin
@@ -285,7 +285,6 @@ class Router:
                 # remove old routes from forwarding_table
                 self.forwarding_table.remove(route)
                 have_coalesced = True
-                self.coalesce(route)
         return have_coalesced
 
     def binary_to_ipv4(self, binary):
@@ -321,19 +320,24 @@ class Router:
             return bin_nmsk.count("1")
 
     def longest_prefix_match(self, routes):
-        outroutes = [routes[0]]
+        outroutes = []
         longest_prefix = 0
         for route in routes:
             bin_nmsk = '.'.join([bin(int(x)+256)[3:] for x in route[NMSK].split('.')])
-            if "01" not in bin_nmsk:
-                one_count = bin_nmsk.count("1")
-                if longest_prefix < one_count:
-                    longest_prefix = one_count
-                    outroutes = [route]
-                elif longest_prefix < one_count:
-                    outroutes.append(route)
+            curr = self.len_pref(bin_nmsk)
+            if curr > longest_prefix:
+                outroutes = [route]
+                longest_prefix = curr
+            elif curr == longest_prefix:
+                outroutes.append(route)
         return outroutes
 
+    def len_pref(self, nmsk):
+        if "01" not in nmsk:
+            return nmsk.count("1")
+        else:
+            return -1
+        
     def update(self, srcif, packet) -> bool:
         """Handle update packets."""
         # attach SRCIF in case needed later
@@ -377,30 +381,30 @@ class Router:
                 ORIG: packetMessage[ORIG]
             })
 
-    def rebuild_table(self, packet):
-        """Rebuilds our forwarding_table when an update/revocation message
-        is received. Reconstructs table using aggregation/disaggregation.
-        """
-        # create copy of updates thus far
-        curr_updates = copy.deepcopy(self.updates)
-        # wipe updates and forwarding_table
-        self.updates = []
-        self.forwarding_table = []
-        for update in curr_updates:
-            for dead_entry in packet[MESG]:
-                if update[TYPE] == UPDT:
-                    sameSource = route[SRCE] == packet[SRCE]
-                    sameDest = route[DEST] == packet[DEST]
-                    part_of_dead_entry = sameSource and sameDest and dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]
-                    if not part_of_dead_entry:
-                        self.update_table(update)
-            # we see a RVKE message that is not related to the current_best
-            # route we are trying to revoke, move on to revoking the newly found one
-            if update[TYPE] == RVKE:
-                # get rid of any dead entries for a found revocation in new forwarding table
-                self.rebuild_table(update)
-                # keep all RVKE statements live in updates table
-                self.updates.append(update)
+    # def rebuild_table(self, packet):
+    #     """Rebuilds our forwarding_table when an update/revocation message
+    #     is received. Reconstructs table using aggregation/disaggregation.
+    #     """
+    #     # create copy of updates thus far
+    #     curr_updates = copy.deepcopy(self.updates)
+    #     # wipe updates and forwarding_table
+    #     self.updates = []
+    #     self.forwarding_table = []
+    #     for update in curr_updates:
+    #         for dead_entry in packet[MESG]:
+    #             if update[TYPE] == UPDT:
+    #                 sameSource = route[SRCE] == packet[SRCE]
+    #                 sameDest = route[DEST] == packet[DEST]
+    #                 part_of_dead_entry = sameSource and sameDest and dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]
+    #                 if not part_of_dead_entry:
+    #                     self.update_table(update)
+    #         # we see a RVKE message that is not related to the current_best
+    #         # route we are trying to revoke, move on to revoking the newly found one
+    #         if update[TYPE] == RVKE:
+    #             # get rid of any dead entries for a found revocation in new forwarding table
+    #             self.rebuild_table(update)
+    #             # keep all RVKE statements live in updates table
+    #             self.updates.append(update)
 
     def revoke(self, packet) -> bool:
         """Handle revoke packets; remove paths from forwarding table and send
@@ -409,12 +413,27 @@ class Router:
         # rebuild whole table, taking into consideration
         # any necessary disaggregation and removing dead entries
         # by not including in the rebuilt table
-        self.rebuild_table(packet)
+        # self.rebuild_table(packet)
+        self.remove_dead_entries(packet)
         self.updates.append(packet)
         # create a deep copy of this update packet to send to neighbors
         copy_of_packet = copy.deepcopy(packet)
         self.forward_to_neighbors(copy_of_packet, packet[SRCE])
         return True
+
+    def remove_dead_entries(self, packet):
+        """Remove the dead entries specified in the packet's message block
+        from the forwarding_table.
+        """
+        for route in self.forwarding_table:
+            for dead_entry in packet[MESG]:
+                sameSource = route[SRCE] == packet[SRCE]
+                sameDest = route[DEST] == packet[DEST]
+                if sameSource and sameDest and dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]:
+                    print("Removing: ", route)
+                    self.forwarding_table.remove(route)
+                    self.revoked.append(route)
+                    break
 
     def forward_to_neighbors(self, packet, srcif):
         source_relationship = self.relations[srcif]
