@@ -260,6 +260,8 @@ class Router:
         """
         have_coalesced = False
         # at any point if we aggregate or disaggregate, mark have_colesced = True
+        packet[MESG][SRCE] = packet[SRCE]
+        packet[MESG][DEST] = packet[DEST]
         for route in self.forwarding_table:
             if self.adj_numerically(route, packet[MESG]) and self.same_attributes(route, packet[MESG]):
                 # get current prefix length and subtract 1
@@ -378,7 +380,9 @@ class Router:
                 # AS Path
                 APTH: packetMessage[APTH],
                 # Origin
-                ORIG: packetMessage[ORIG]
+                ORIG: packetMessage[ORIG],
+                # CIDR Prefix Length
+                "CIDR": self.get_prefix(packetMessage)
             })
 
     # def rebuild_table(self, packet):
@@ -430,7 +434,6 @@ class Router:
                 sameSource = route[SRCE] == packet[SRCE]
                 sameDest = route[DEST] == packet[DEST]
                 if sameSource and sameDest and dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]:
-                    print("Removing: ", route)
                     self.forwarding_table.remove(route)
                     self.revoked.append(route)
                     break
@@ -457,7 +460,7 @@ class Router:
     def dump(self, packet) -> bool:
         """Handles dump table requests by crafting a table message."""
         # create deep copy of packet
-        self.compress()
+        self.forwarding_table = self.compress()
         copy_of_packet = copy.deepcopy(packet)
         # swap dest and srce of packet
         copy_of_packet[SRCE] = packet[DEST]
@@ -480,33 +483,32 @@ class Router:
         """Compresses the resulting forwarding_table to account for any entries
         that are still adj_numerically and same_attributes.
         """
-        for i in range(len(self.forwarding_table) - 1):
-            for j in range(0, len(self.forwarding_table)):
-                at_i = self.forwarding_table[i]
-                at_j = self.forwarding_table[j]
-                if self.adj_numerically(at_i, at_j) and self.same_attributes(at_i, at_j):
-                    if at_i[NMSK] != at_j[NMSK] or at_i[NTWK] != at_j[NTWK]:
-                        p_len = self.get_prefix(at_i) - 1
-                    else:
-                        p_len = self.get_prefix(at_i)
-                # convert new prefix length into netmask ip format (255.255.255.0, e.g.)
-                # append (32 - (prefix length)) many 0's -> bin to ip that
+        sorted_table = sorted(self.forwarding_table, reverse=True, key=lambda x: x["CIDR"])
+        i = 0
+        while i + 1 < len(sorted_table):
+            at_i = sorted_table[i]
+            at_i_plus = sorted_table[i+1]
+            if self.adj_numerically(at_i, at_i_plus) and self.same_attributes(at_i, at_i_plus):
+                if at_i[NMSK] != at_i_plus[NMSK] or at_i[NTWK] != at_i_plus[NTWK]:
+                    p_len = self.get_prefix(at_i) - 1
+                else:
+                    p_len = self.get_prefix(at_i)
                 bin_nmsk = ("1" * p_len).ljust(32, "0")
                 nmsk_ip = self.binary_to_ipv4(bin_nmsk)
-                # make a new entry with ^^^^ NMSK and lower of the two IPs (compare_ip())
                 lower_ip = None
-                if self.compare_ip(at_i[NTWK], at_j[NTWK]) == 1:
-                    lower_ip = at_j[NTWK]
+                if self.compare_ip(at_i[NTWK], at_i_plus[NTWK]) == 1:
+                    lower_ip = at_i_plus[NTWK]
                 else:
                     lower_ip = at_i[NTWK]
-                # create new route with original SRCE, DEST and new msg -> NTWK and NMSK
                 copy_of_route = copy.deepcopy(at_i)
                 copy_of_route[NTWK] = lower_ip
                 copy_of_route[NMSK] = nmsk_ip
-                self.forwarding_table.append(copy_of_route)
-                # remove old routes from forwarding_table
-                self.forwarding_table.remove(at_i)
-                self.forwarding_table.remove(at_j)
+                copy_of_route["CIDR"] = p_len
+                sorted_table[i] = copy_of_route
+                sorted_table.pop(i+1)
+            i += 1
+        return sorted_table
+            
 
     def handle_packet(self, srcif, packet) -> bool:
         """Dispatches a packet to the correct method."""
