@@ -261,7 +261,7 @@ class Router:
         have_coalesced = False
         # at any point if we aggregate or disaggregate, mark have_colesced = True
         for route in self.forwarding_table:
-            if self.adj_numerically(route, packet) and self.same_attributes(route, packet):
+            if self.adj_numerically(route, packet[MESG]) and self.same_attributes(route, packet[MESG]):
                 # get current prefix length and subtract 1
                 if route[NMSK] != packet[MESG][NMSK] or route[NTWK] != packet[MESG][NTWK]:
                     p_len = self.get_prefix(route) - 1
@@ -297,20 +297,20 @@ class Router:
 
     def same_attributes(self, route, packet) -> bool:
         """Checks if route and packet have all the same attributes (including next hop router)."""
-        msg = packet[MESG]
+        msg = packet
         return route[LPRF] == msg[LPRF] and route[SORG] == msg[SORG] and route[APTH] == msg[APTH] and route[ORIG] == msg[ORIG] and route[PEER] == packet[SRCE]
 
     def adj_numerically(self, route, packet) -> bool:
         """Checks if route and packet are numerically adjacent."""
-        if route[NMSK] != packet[MESG][NMSK]:
+        if route[NMSK] != packet[NMSK]:
             return False
         prefix = self.get_prefix(route)
         # ensure prefixes are equal
-        if prefix != self.get_prefix(packet[MESG]):
+        if prefix != self.get_prefix(packet):
             return False
         # check if route[NTWK] == packet[NTWK] up to (prefix length - 1)
         bin_route = '.'.join([bin(int(x)+256)[3:] for x in route[NTWK].split('.')])
-        bin_packet = '.'.join([bin(int(x)+256)[3:] for x in route[NTWK].split('.')])
+        bin_packet = '.'.join([bin(int(x)+256)[3:] for x in packet[NTWK].split('.')])
         return bin_route[:prefix - 1] == bin_packet[:prefix - 1]
 
     def get_prefix(self, route):
@@ -457,6 +457,7 @@ class Router:
     def dump(self, packet) -> bool:
         """Handles dump table requests by crafting a table message."""
         # create deep copy of packet
+        self.compress()
         copy_of_packet = copy.deepcopy(packet)
         # swap dest and srce of packet
         copy_of_packet[SRCE] = packet[DEST]
@@ -474,6 +475,38 @@ class Router:
         # send table response to original source (who requested the dump data)
         self.sockets[copy_of_packet[DEST]].sendall(sending_msg)
         return True
+
+    def compress(self):
+        """Compresses the resulting forwarding_table to account for any entries
+        that are still adj_numerically and same_attributes.
+        """
+        for i in range(len(self.forwarding_table) - 1):
+            for j in range(0, len(self.forwarding_table)):
+                at_i = self.forwarding_table[i]
+                at_j = self.forwarding_table[j]
+                if self.adj_numerically(at_i, at_j) and self.same_attributes(at_i, at_j):
+                    if at_i[NMSK] != at_j[NMSK] or at_i[NTWK] != at_j[NTWK]:
+                        p_len = self.get_prefix(at_i) - 1
+                    else:
+                        p_len = self.get_prefix(at_i)
+                # convert new prefix length into netmask ip format (255.255.255.0, e.g.)
+                # append (32 - (prefix length)) many 0's -> bin to ip that
+                bin_nmsk = ("1" * p_len).ljust(32, "0")
+                nmsk_ip = self.binary_to_ipv4(bin_nmsk)
+                # make a new entry with ^^^^ NMSK and lower of the two IPs (compare_ip())
+                lower_ip = None
+                if self.compare_ip(at_i[NTWK], at_j[NTWK]) == 1:
+                    lower_ip = at_j[NTWK]
+                else:
+                    lower_ip = at_i[NTWK]
+                # create new route with original SRCE, DEST and new msg -> NTWK and NMSK
+                copy_of_route = copy.deepcopy(at_i)
+                copy_of_route[NTWK] = lower_ip
+                copy_of_route[NMSK] = nmsk_ip
+                self.forwarding_table.append(copy_of_route)
+                # remove old routes from forwarding_table
+                self.forwarding_table.remove(at_i)
+                self.forwarding_table.remove(at_j)
 
     def handle_packet(self, srcif, packet) -> bool:
         """Dispatches a packet to the correct method."""
