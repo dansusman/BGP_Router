@@ -262,11 +262,36 @@ class Router:
         # at any point if we aggregate or disaggregate, mark have_colesced = True
         for route in self.forwarding_table:
             if self.adj_numerically(route, packet) and self.same_attributes(route, packet):
-                # bitwise AND route[NTWK] w/ route[NMSK], packet[NTWK] w/ packet[NMSK]
                 # get current prefix length and subtract 1
-                # add a new entry to forwarding_table with new network and netmask? (only change netmask?)
+                p_len = self.get_prefix(route) - 1
+                # convert new prefix length into netmask ip format (255.255.255.0, e.g.)
+                # append (32 - (prefix length)) many 0's -> bin to ip that
+                bin_nmsk = ("1" * p_len).ljust(32, "0")
+                nmsk_ip = self.binary_to_ipv4(bin_nmsk)
+                # make a new entry with ^^^^ NMSK and lower of the two IPs (compare_ip())
+                lower_ip = None
+                if compare_ip(route[NTWK], packet[MESG][NTWK]) == 1:
+                    lower_ip = packet[MESG][NTWK]
+                else:
+                    lower_ip = route[NTWK]
+                # remove both routes from forwarding_table
+                self.forwarding_table.remove(route)
+                self.forwarding_table.remove(packet)
+                # create new route with original SRCE, DEST and new msg -> NTWK and NMSK
+                copy_of_route = copy.deepcopy(route)
+                copy_of_route[MESG][NTWK] = lower_ip
+                copy_of_route[MESG][NMSK] = nmsk_ip
+                self.forwarding_table.append(copy_of_route)
                 have_colesced = True
         return have_coalesced
+
+    def binary_to_ipv4(self, binary):
+        """Converts given binary to IPv4 format (dotted quad)."""
+        first = str(int(binary[:8], 2))
+        second = str(int(binary[8:16], 2))
+        third = str(int(binary[16:24], 2))
+        fourth = str(int(binary[24:32], 2))
+        return ".".join([first, second, third, fourth]
 
     def same_attributes(self, route, packet) -> bool:
         """Checks if route and packet have all the same attributes (including next hop router)."""
@@ -310,6 +335,16 @@ class Router:
         """Handle update packets."""
         # attach SRCIF in case needed later
         packet["srcif"] = srcif
+        # update forwarding_table with new entry
+        self.update_table(packet)
+        # create a deep copy of this update packet to send to neighbors
+        copy_of_packet = copy.deepcopy(packet)
+        copy_of_packet[MESG][APTH].append(int(self.asn))
+        self.forward_to_neighbors(copy_of_packet, srcif)
+        return True
+
+    def update_table(self, packet):
+        """Updates the forwarding_table with a new packet."""
         # add packet to list of updates (cache for later)
         self.updates.append(packet)
         packetMessage = packet[MESG]
@@ -338,11 +373,6 @@ class Router:
                 # Origin
                 ORIG: packetMessage[ORIG]
             })
-        # create a deep copy of this update packet to send to neighbors
-        copy_of_packet = copy.deepcopy(packet)
-        copy_of_packet[MESG][APTH].append(int(self.asn))
-        self.forward_to_neighbors(copy_of_packet, srcif)
-        return True
 
     def rebuild_table(self, packet):
         """Rebuilds our forwarding_table when an update/revocation message
@@ -353,17 +383,32 @@ class Router:
         # wipe updates and forwarding_table
         self.updates = []
         self.forwarding_table = []
-
+        for update in curr_updates:
+            for dead_entry in packet[MESG]:
+                if update[TYPE] == UPDT:
+                    sameSource = route[SRCE] == packet[SRCE]
+                    sameDest = route[DEST] == packet[DEST]
+                    part_of_dead_entry = sameSource and sameDest and dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]:
+                    if not part_of_dead_entry:
+                        self.update_table(update)
+            # we see a RVKE message that is not related to the current_best
+            # route we are trying to revoke, move on to revoking the newly found one
+            if update[TYPE] == RVKE:
+                # get rid of any dead entries for a found revocation in new forwarding table
+                self.rebuild_table(update)
+                # keep all RVKE statements live in updates table
+                self.updates.append(update)
 
 
     def revoke(self, packet) -> bool:
         """Handle revoke packets; remove paths from forwarding table and send
         revoke messages to neighbors as necessary.
         """
+        # rebuild whole table, taking into consideration
+        # any necessary disaggregation and removing dead entries
+        # by not including in the rebuilt table
         self.rebuild_table(packet)
         self.updates.append(packet)
-        # remove any dead entries from forwarding_table
-        self.remove_dead_entries(packet)
         # create a deep copy of this update packet to send to neighbors
         copy_of_packet = copy.deepcopy(packet)
         self.forward_to_neighbors(copy_of_packet, packet[SRCE])
@@ -387,19 +432,6 @@ class Router:
                     packet[DEST] = neighbor
                     sending_msg = json.dumps(packet).encode()
                     self.sockets[neighbor].sendall(sending_msg)
-
-    def remove_dead_entries(self, packet):
-        """Remove the dead entries specified in the packet's message block
-        from the forwarding_table.
-        """
-        for route in self.forwarding_table:
-            for dead_entry in packet[MESG]:
-                sameSource = route[SRCE] == packet[SRCE]
-                sameDest = route[DEST] == packet[DEST]
-                if sameSource and sameDest and dead_entry[NTWK] == route[NTWK] and dead_entry[NMSK] == route[NMSK]:
-                    self.forwarding_table.remove(route)
-                    self.revoked.append(route)
-                    break
 
     def dump(self, packet) -> bool:
         """Handles dump table requests by crafting a table message."""
