@@ -281,6 +281,8 @@ class Router:
                 copy_of_route = copy.deepcopy(route)
                 copy_of_route[NTWK] = lower_ip
                 copy_of_route[NMSK] = nmsk_ip
+                print("ORIGINAL: ", route, "COPY: ", copy_of_route) 
+
                 self.forwarding_table.append(copy_of_route)
                 # remove both routes from forwarding_table
                 print(self.forwarding_table)
@@ -355,30 +357,30 @@ class Router:
         self.updates.append(packet)
         packetMessage = packet[MESG]
         # if we don't need to coalesce, add entry to forwarding table
-        # add a new entry into forwarding table
-        # storing network, netmask, peer, localPref,
-        # selfOrigin, AS Path, and Origin information
-        self.forwarding_table.append({
-            # SRCE
-            SRCE: packet[SRCE],
-            # DEST
-            DEST: packet[DEST],
-            # NTWK
-            NTWK: packetMessage[NTWK],
-            # NMSK
-            NMSK: packetMessage[NMSK],
-            # PEER IP
-            PEER: packet[SRCE],
-            # Local Pref
-            LPRF: packetMessage[LPRF],
-            # Self Origin
-            SORG: packetMessage[SORG],
-            # AS Path
-            APTH: packetMessage[APTH],
-            # Origin
-            ORIG: packetMessage[ORIG]
-        })
-        self.coalesce(packet)
+        if not coalesce(packet):
+            # add a new entry into forwarding table
+            # storing network, netmask, peer, localPref,
+            # selfOrigin, AS Path, and Origin information
+            self.forwarding_table.append({
+                # SRCE
+                SRCE: packet[SRCE],
+                # DEST
+                DEST: packet[DEST],
+                # NTWK
+                NTWK: packetMessage[NTWK],
+                # NMSK
+                NMSK: packetMessage[NMSK],
+                # PEER IP
+                PEER: packet[SRCE],
+                # Local Pref
+                LPRF: packetMessage[LPRF],
+                # Self Origin
+                SORG: packetMessage[SORG],
+                # AS Path
+                APTH: packetMessage[APTH],
+                # Origin
+                ORIG: packetMessage[ORIG]
+            })
 
     def rebuild_table(self, packet):
         """Rebuilds our forwarding_table when an update/revocation message
