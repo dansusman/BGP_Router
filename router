@@ -281,14 +281,9 @@ class Router:
                 copy_of_route = copy.deepcopy(route)
                 copy_of_route[NTWK] = lower_ip
                 copy_of_route[NMSK] = nmsk_ip
-                print(copy_of_route)
                 self.forwarding_table.append(copy_of_route)
-                print(self.forwarding_table)
-                # remove both routes from forwarding_table
+                # remove old routes from forwarding_table
                 self.forwarding_table.remove(route)
-                print(self.forwarding_table)
-                # self.forwarding_table.remove(packet)
-                print(self.forwarding_table)
                 have_colesced = True
         return have_coalesced
 
@@ -340,6 +335,7 @@ class Router:
 
     def update(self, srcif, packet) -> bool:
         """Handle update packets."""
+        print(self.forwarding_table)
         # attach SRCIF in case needed later
         packet["srcif"] = srcif
         # update forwarding_table with new entry
@@ -353,6 +349,7 @@ class Router:
     def update_table(self, packet):
         """Updates the forwarding_table with a new packet."""
         # add packet to list of updates (cache for later)
+        print(self.forwarding_table)
         self.updates.append(packet)
         packetMessage = packet[MESG]
         # if we don't need to coalesce, add entry to forwarding table
@@ -463,6 +460,7 @@ class Router:
 
     def handle_packet(self, srcif, packet) -> bool:
         """Dispatches a packet to the correct method."""
+        print(self.forwarding_table)
         typeOfPacket = packet["type"]
         if typeOfPacket == DATA:
             return self.forward(srcif, packet)
