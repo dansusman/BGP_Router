@@ -264,30 +264,36 @@ class Router:
         packet[MESG][DEST] = packet[DEST]
         for route in self.forwarding_table:
             if self.adj_numerically(route, packet[MESG]) and self.same_attributes(route, packet[MESG]):
-                # get current prefix length and subtract 1
-                if route[NMSK] != packet[MESG][NMSK] or route[NTWK] != packet[MESG][NTWK]:
-                    p_len = self.get_prefix(route) - 1
-                else:
-                    p_len = self.get_prefix(route)
-                # convert new prefix length into netmask ip format (255.255.255.0, e.g.)
-                # append (32 - (prefix length)) many 0's -> bin to ip that
-                bin_nmsk = ("1" * p_len).ljust(32, "0")
-                nmsk_ip = self.binary_to_ipv4(bin_nmsk)
-                # make a new entry with ^^^^ NMSK and lower of the two IPs (compare_ip())
-                lower_ip = None
-                if self.compare_ip(route[NTWK], packet[MESG][NTWK]) == 1:
-                    lower_ip = packet[MESG][NTWK]
-                else:
-                    lower_ip = route[NTWK]
-                # create new route with original SRCE, DEST and new msg -> NTWK and NMSK
-                copy_of_route = copy.deepcopy(route)
-                copy_of_route[NTWK] = lower_ip
-                copy_of_route[NMSK] = nmsk_ip
+                copy_of_route = self.aggregate_routes(route, packet[MESG])
                 self.forwarding_table.append(copy_of_route)
                 # remove old routes from forwarding_table
                 self.forwarding_table.remove(route)
                 have_coalesced = True
         return have_coalesced
+
+    def aggregate_routes(self, route1, route2):
+        """Combine routes into a single aggregated route."""
+        # get current prefix length and subtract 1
+        if route1[NMSK] != route2[NMSK] or route1[NTWK] != route2[NTWK]:
+            p_len = self.get_prefix(route1) - 1
+        else:
+            p_len = self.get_prefix(route1)
+        # convert new prefix length into netmask ip format (255.255.255.0, e.g.)
+        # append (32 - (prefix length)) many 0's -> bin to ip that
+        bin_nmsk = ("1" * p_len).ljust(32, "0")
+        nmsk_ip = self.binary_to_ipv4(bin_nmsk)
+        # make a new entry with ^^^^ NMSK and lower of the two IPs (compare_ip())
+        lower_ip = None
+        if self.compare_ip(route1[NTWK], route2[NTWK]) == 1:
+            lower_ip = route2[NTWK]
+        else:
+            lower_ip = route1[NTWK]
+        # create new route with original SRCE, DEST and new msg -> NTWK and NMSK
+        copy_of_route = copy.deepcopy(route1)
+        copy_of_route[NTWK] = lower_ip
+        copy_of_route[NMSK] = nmsk_ip
+        copy_of_route["CIDR"] = p_len
+        return copy_of_route
 
     def binary_to_ipv4(self, binary):
         """Converts given binary to IPv4 format (dotted quad)."""
@@ -318,10 +324,17 @@ class Router:
     def get_prefix(self, route):
         """Gets the prefix value of a given route's netmask."""
         bin_nmsk = '.'.join([bin(int(x)+256)[3:] for x in route[NMSK].split('.')])
-        if "01" not in bin_nmsk:
-            return bin_nmsk.count("1")
+        return self.len_pref(bin_nmsk)
+
+    def len_pref(self, nmsk):
+        """Gets the length of the prefix."""
+        if "01" not in nmsk:
+            return nmsk.count("1")
+        else:
+            return -1
 
     def longest_prefix_match(self, routes):
+        """Gets the longest prefix match in the given routes list."""
         outroutes = []
         longest_prefix = 0
         for route in routes:
@@ -333,12 +346,6 @@ class Router:
             elif curr == longest_prefix:
                 outroutes.append(route)
         return outroutes
-
-    def len_pref(self, nmsk):
-        if "01" not in nmsk:
-            return nmsk.count("1")
-        else:
-            return -1
         
     def update(self, srcif, packet) -> bool:
         """Handle update packets."""
@@ -439,6 +446,7 @@ class Router:
                     break
 
     def forward_to_neighbors(self, packet, srcif):
+        """Sends the given packet to all neighbors based on relationships."""
         source_relationship = self.relations[srcif]
         # if update received from a customer: send updates to all other neighbors
         if source_relationship == CUST:
@@ -489,21 +497,7 @@ class Router:
             at_i = sorted_table[i]
             at_i_plus = sorted_table[i+1]
             if self.adj_numerically(at_i, at_i_plus) and self.same_attributes(at_i, at_i_plus):
-                if at_i[NMSK] != at_i_plus[NMSK] or at_i[NTWK] != at_i_plus[NTWK]:
-                    p_len = self.get_prefix(at_i) - 1
-                else:
-                    p_len = self.get_prefix(at_i)
-                bin_nmsk = ("1" * p_len).ljust(32, "0")
-                nmsk_ip = self.binary_to_ipv4(bin_nmsk)
-                lower_ip = None
-                if self.compare_ip(at_i[NTWK], at_i_plus[NTWK]) == 1:
-                    lower_ip = at_i_plus[NTWK]
-                else:
-                    lower_ip = at_i[NTWK]
-                copy_of_route = copy.deepcopy(at_i)
-                copy_of_route[NTWK] = lower_ip
-                copy_of_route[NMSK] = nmsk_ip
-                copy_of_route["CIDR"] = p_len
+                copy_of_route = self.aggregate_routes(at_i, at_i_plus)
                 sorted_table[i] = copy_of_route
                 sorted_table.pop(i+1)
             i += 1
