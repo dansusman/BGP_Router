@@ -1,4 +1,4 @@
-# cs3700-proj3 - J. Adisoetjahya, D. Susman
+# BGP Router - J. Adisoetjahya, D. Susman, Networks and Distributed Systems (Northeastern)
 
 ## High Level Approach
 
