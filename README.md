@@ -1,4 +1,6 @@
-# BGP Router - J. Adisoetjahya, D. Susman, Networks and Distributed Systems (Northeastern)
+# BGP Router - J. Adisoetjahya, D. Susman
+
+This repo holds the source code for project 3 - BGP Router in the Networks and Distributed Systems course at Northeastern University (Fall 2021).
 
 ## High Level Approach
 
